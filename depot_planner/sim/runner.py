@@ -45,6 +45,12 @@ class EpisodeResult:
     plans: list[tuple[int, list[Cell]]] = field(default_factory=list)
     collision_step: int | None = None
     collision_detail: str = ""
+    plan_failure_reasons: dict[str, int] = field(default_factory=dict)
+
+    def plan_age_at(self, t: int) -> int | None:
+        """How many steps old the plan being executed at step ``t`` was."""
+        issued = [when for when, _ in self.plans if when <= t]
+        return None if not issued else t - issued[-1]
 
     def as_row(self) -> dict[str, Any]:
         """Flat record for the battery CSV (no trajectories)."""
@@ -66,6 +72,9 @@ class EpisodeResult:
             "max_planning_ms": self.max_planning_ms,
             "collision_step": self.collision_step,
             "reason": self.reason,
+            "plan_failure_reasons": "; ".join(
+                f"{reason} x{count}" for reason, count in sorted(self.plan_failure_reasons.items())
+            ),
         }
 
 
@@ -97,6 +106,7 @@ def run_episode(
     nodes = 0
     replans = 0
     plan_failures = 0
+    failure_reasons: dict[str, int] = {}
     collision: CollisionReport | None = None
 
     plan_cells: list[Cell] = []
@@ -117,9 +127,12 @@ def run_episode(
                     plans.append((t, list(result.cells)))
             else:
                 plan_failures += 1
+                reason = result.reason or "no plan"
+                failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
                 if not hold_on_failure:
                     return _finish(scenario, planner, cells, times, plans, timings, nodes,
-                                   replans, plan_failures, None, "no plan and holding disabled")
+                                   replans, plan_failures, None, "no plan and holding disabled",
+                                   failure_reasons)
                 plan_cells = [state, state]
                 plan_index = 0
                 if record_plans:
@@ -136,11 +149,14 @@ def run_episode(
 
         report = check_trajectory(grid, scenario.agents, cells[-2:], times[-2:])
         if not report.ok:
+            # The checker saw a two-step window; translate its index back to the
+            # position in the full trajectory so the report renders the right frame.
+            report.step = len(cells) - 2 + (report.step or 0)
             collision = report
             break
 
     return _finish(scenario, planner, cells, times, plans, timings, nodes, replans,
-                   plan_failures, collision, "")
+                   plan_failures, collision, "", failure_reasons)
 
 
 def _finish(
@@ -155,6 +171,7 @@ def _finish(
     plan_failures: int,
     collision: CollisionReport | None,
     reason_override: str,
+    failure_reasons: dict[str, int] | None = None,
 ) -> EpisodeResult:
     resolution = scenario.grid.resolution
     steps = len(cells) - 1
@@ -198,6 +215,7 @@ def _finish(
         plans=plans,
         collision_step=None if collision is None else collision.step,
         collision_detail="" if collision is None else collision.describe(),
+        plan_failure_reasons=dict(failure_reasons or {}),
     )
 
 

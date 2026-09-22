@@ -144,3 +144,80 @@ One line per decision: what was chosen and why.
   model never accepts a pose the exact test rejects.
 - A `tight` scenario picks one of the three base layouts at random and applies the
   minimal-clearance overrides, rather than being a fourth layout of its own.
+
+## Hard tier (added after step 5)
+
+- Hard types are **additive**, never edits to the normal tier. `configs/scenarios.yaml`,
+  `configs/parking.yaml` and `configs/eval.yaml` each gained a separate block; resolving a
+  hard type deep-merges its overrides into a *copy*, and a test asserts the normal configs
+  are byte-identical afterwards. Both normal tiers were re-run and match their previous
+  numbers exactly.
+- Hard space-time types: `congested_hard` (12-16 agents rather than 6-10) and
+  `head_on_narrow` (aisles cut from 4 cells to 3, where a 2-cell vehicle plus its 1-cell
+  margin fills the lane completely, so the ego cannot squeeze past at all).
+- The per-replan budget is **50 ms**, chosen as one fifth of the 250 ms simulation step —
+  a real-time argument, not a number picked to produce a particular score. It applies to
+  both planners so the comparison stays fair.
+- The parking hard tier draws its gap from `minimum + 0.3 .. 0.6 m`, where the minimum is
+  **computed** in `world/parking.py` from the car geometry and the collision model
+  (`minimum_parallel_gap`, `minimum_spot_width`), not written down by hand. A test pins
+  that derivation to reality: at `minimum + 0.1 m` the goal pose is collision free, at
+  `minimum - 0.1 m` it is not.
+- The parking expansion cap is **5000**, about the normal tier's mean for `parallel`
+  (6372) and a sixth of the normal 30000: "you get roughly an average normal budget".
+- Nothing was tuned after the hard tier was first run. Two of its results are worth stating
+  plainly rather than engineering away:
+  - **The cheap baseline beats space-time A\* in narrow aisles under a budget.** On
+    `head_on_narrow` the baseline scores 100% and space-time A* 53%, because a 50 ms
+    budget is not enough for the space-time search in a narrow aisle, so it returns no
+    plan, holds position and times out. Optimality is worthless if it does not fit in the
+    control loop.
+  - **`perpendicular_minimal` is not as hard as it sounds.** Its computed band
+    (2.43-2.73 m) is *wider* than the existing `tight` type's fixed 2.3 m spot, so its
+    difficulty comes almost entirely from the expansion cap, and it scores 97%. The band
+    follows the specification; the honest observation is that the spec's own `tight` tier
+    was already below it.
+
+## Step 6 — report and README
+
+- `REPORT.md` is generated from the CSVs. The one thing `make_report.py` computes itself is
+  the step-1 benchmark, which it runs and writes to `results/grid_benchmark.csv` before
+  reading it back, so "every number comes from running the code" still holds.
+- Report figures and failure frames are written to `results/README_assets/report/` rather
+  than a gitignored directory, so the images in `REPORT.md` and `README.md` actually render
+  on GitHub. `.gitignore` already un-ignores `results/README_assets/`.
+- Failure diagnoses are derived from what the episode recorded (plan-failure reasons and
+  counts, wait steps, distance covered, plan age at the moment of collision), not written
+  by hand per case, so they stay correct when the batteries are re-run.
+- Writing the failure section caught two bugs in step 4's reporting:
+  - `run_episode` passed a two-step window to the collision checker, so the reported
+    `collision_step` was 0 or 1 rather than a position in the trajectory. The failure
+    frames were rendering the wrong moment. The runner now translates the index back.
+  - The first draft "staleness" figure was `steps - collision_step`, which is not
+    staleness at all. It now comes from `EpisodeResult.plan_age_at`, the gap between the
+    collision and the last replan. For the baseline it is typically 1 step, which is the
+    real point: replanning every single step does not help if you freeze a moving vehicle
+    where it currently stands.
+
+## Step 7 — C++ core
+
+- Built with a plain `setup.py` `Pybind11Extension` rather than scikit-build-core, because
+  the project already uses the setuptools backend and needed no other build machinery.
+- `build_ext` is wrapped so a missing compiler warns instead of failing the install, and
+  `depot_planner/grid_astar/backend.py` falls back to the Python search. `pip install -e .`
+  therefore works with or without a toolchain.
+- The core reproduces the Python search *exactly*, not approximately. The first version
+  matched every cost but differed on 34 of 600 paths: the Python heap pushes
+  `(f, g, counter, cell)`, so ties on `f` break towards the smaller `g`, and the C++
+  comparator only had `(f, order)`. With `g` added, all 600 comparisons return the same
+  path, the same cost and the same expansion count.
+- A second parity bug: C++ used `time_limit_ms = 0.0` as its "unlimited" sentinel while
+  Python treats an explicit `0.0` as "expire immediately". The sentinel is now negative,
+  and a test runs both backends at `time_limit_ms=0.0` and expects both to give up.
+- `search(backend=...)` defaults to `"auto"`: the core whenever it is built and the call
+  does not need the expanded-cell set, Python otherwise. To make sure this did not quietly
+  change any published number, all four battery tiers were re-run and diffed against the
+  pre-extension CSVs on every non-timing column.
+- The core is not used where the caller wants `expanded` (the step-1 figures) or a
+  heuristic scale that disagrees with the grid minimum, because either would change the
+  search rather than just speed it up.
