@@ -120,7 +120,7 @@ def cpp_section(frame: pd.DataFrame | None) -> list[str]:
     return [
         "## 7. Python vs C++ (step 7)",
         "",
-        "`cpp/grid_astar.cpp` is a C++17 port of the step-1 search with the same neighbourhood, "
+        "The C++ core under `cpp/` is a C++17 port of the step-1 search with the same neighbourhood, "
         "cost rule, heuristic and tie-breaking. Best of three runs per problem, same start/goal "
         "pairs as section 1.",
         "",

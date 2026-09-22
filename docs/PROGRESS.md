@@ -1,6 +1,9 @@
 # Progress
 
-Read this first. Status of each step from [`TASK.md`](TASK.md).
+Read this first. Status of each step from [`TASK.md`](TASK.md), then of the
+follow-up C++ port in [`TASK_CPP.md`](TASK_CPP.md).
+
+## Original brief ([`TASK.md`](TASK.md))
 
 - [x] **Step 1: Grid A* with driving cost map** — done. Occupancy grid + EDT proximity
       penalty, one generic best-first search (Dijkstra / A* / weighted A*), deterministic
@@ -41,16 +44,40 @@ Read this first. Status of each step from [`TASK.md`](TASK.md).
       generated tables, MIT licence, dead code removed, docstrings completed, project
       docs moved into `docs/`. No planner behaviour or recorded result changed.
 
+## C++ port ([`TASK_CPP.md`](TASK_CPP.md))
+
+The planners move into a real C++17 library; Python keeps scenario generation,
+orchestration, the independent collision checkers, plotting and reports.
+
+- [x] **C++ step 1: project foundation** — done. `cpp/` holds a CMake project building
+      the static library `depot_core`, the pybind11 module `depot_planner._cpp`, a
+      GoogleTest binary and a Google Benchmark binary. `pip install -e .` builds the
+      library and the extension through scikit-build-core; GoogleTest and Google
+      Benchmark are fetched by CMake only for the standalone `make cpp-test` /
+      `make cpp-bench` build, so an install never downloads them. `.clang-format`,
+      `make format`, `make format-check` and `make cpp-test` added. 11 GoogleTest
+      cases and 170 pytest tests green.
+- [ ] C++ step 2: shared core types, templated grid search, distance field in C++
+- [ ] C++ step 3: space-time A* and the snapshot baseline in C++
+- [ ] C++ step 4: hybrid A* and Reeds-Shepp in C++
+- [ ] C++ step 5: pipeline defaults to the C++ backend; batteries and REPORT.md rerun
+- [ ] C++ step 6: Google Benchmark suite, Python-vs-C++ table, sanitizer CI
+- [ ] C++ step 7 (optional): closed-loop runner in C++
+- [ ] C++ step 8: README architecture and build documentation
+
 ## How to run
 
 ```
-make setup     # pip install -e ".[dev]"  (also builds the optional C++ core)
-make test      # the test suite
-make step1     # results/step1/compare.png
-make battery   # both tiers of both batteries
-make gifs      # every GIF and demo figure, including the README showcase
-make report    # regenerates REPORT.md and the README's generated tables
-make all       # all of the above, in order
+make setup      # pip install -e ".[dev]"  (builds the C++ core via scikit-build-core)
+make test       # the Python test suite
+make cpp-test   # configure, build and ctest the C++ core (fetches GoogleTest)
+make cpp-bench  # the Google Benchmark suite
+make format     # clang-format the C++ sources in place
+make step1      # results/step1/compare.png
+make battery    # both tiers of both batteries
+make gifs       # every GIF and demo figure, including the README showcase
+make report     # regenerates REPORT.md and the README's generated tables
+make all        # setup, tests, batteries, GIFs and the report, in order
 ```
 
 Run the suite with `make test` (= `python3 -m pytest -q`); see `DECISIONS.md` for why the

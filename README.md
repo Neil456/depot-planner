@@ -167,11 +167,11 @@ rendering the wrong frame. Found only when the images were first looked at.
 
 ## C++ core
 
-`cpp/grid_astar.cpp` is a C++17 port of the grid search exposed through pybind11,
-with the same neighbourhood, cost rule, heuristic and tie-breaking. It is
-optional: without a compiler the build warns and the pure-Python search is used
-instead. Best of three runs per problem, on the same 100 start/goal pairs as the
-grid table in Results.
+The planning core lives under `cpp/` as a C++17 library (`depot_core`) exposed
+through pybind11, with the same neighbourhood, cost rule, heuristic and
+tie-breaking as the Python reference. `pip install -e .` builds it through
+scikit-build-core. Best of three runs per problem, on the same 100 start/goal
+pairs as the grid table in Results.
 
 <!-- BEGIN GENERATED: cpp_table -->
 | algorithm | Python ms | C++ ms | speedup | identical paths |
@@ -184,7 +184,7 @@ grid table in Results.
 ## Quickstart
 
 ```bash
-pip install -e ".[dev]"   # also builds the optional C++ core
+pip install -e ".[dev]"   # builds the C++ core via scikit-build-core
 make test                 # the test suite
 make all                  # setup, tests, batteries, GIFs and the report (~12 min)
 ```
@@ -204,7 +204,12 @@ depot_planner/
   sim/          closed-loop runner and two independent collision checkers
   viz/          top-down renderer, episode GIFs, parking GIFs, showcase GIFs
   eval/         batteries, benchmarks, report and README generation
-cpp/            the optional C++17 core
+cpp/
+  include/depot/  public headers of the C++17 planning core
+  src/            its implementation
+  bindings/       the pybind11 module (depot_planner._cpp)
+  tests/          GoogleTest suite
+  bench/          Google Benchmark suite
 configs/        every tunable parameter
 scripts/        one CLI entry point per Makefile target
 tests/          the test suite

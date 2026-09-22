@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=68", "wheel", "pybind11>=2.11"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core>=0.9", "pybind11>=2.11"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "depot-planner"
-version = "0.1.0"
-description = "Grid A*, space-time A* and hybrid A* parking planners for a 2D vehicle depot"
+version = "0.2.0"
+description = "Grid A*, space-time A* and hybrid A* planners for a 2D vehicle depot, with a C++ core"
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
@@ -24,8 +24,17 @@ Homepage = "https://github.com/Neil456/depot-planner"
 [project.optional-dependencies]
 dev = ["pytest>=7.4"]
 
-[tool.setuptools.packages.find]
-include = ["depot_planner*"]
+[tool.scikit-build]
+cmake.source-dir = "cpp"
+cmake.version = ">=3.20"
+wheel.packages = ["depot_planner"]
+build-dir = "build/{wheel_tag}"
+sdist.include = ["cpp/**"]
+
+[tool.scikit-build.cmake.define]
+DEPOT_BUILD_PYTHON = "ON"
+DEPOT_BUILD_TESTS = "OFF"
+DEPOT_BUILD_BENCH = "OFF"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,8 +1,8 @@
 """Dispatch between the pure-Python step-1 search and the optional C++ core.
 
-The C++ extension (``depot_planner._cpp``, built from ``cpp/grid_astar.cpp``) is
-a drop-in replacement for the step-1 search. It is optional: if it was not
-built, everything falls back to the Python implementation.
+The C++ extension (``depot_planner._cpp``, built from the ``cpp/`` library) is a
+drop-in replacement for the step-1 search. The Python implementation is kept as
+the reference and is still used when the extension is missing.
 """
 
 from __future__ import annotations

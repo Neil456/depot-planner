@@ -260,3 +260,39 @@ One line per decision: what was chosen and why.
 - No planner code, config default or recorded result was changed in this pass. The battery
   CSVs were regenerated from the code so the report and README agree, and the test suite is
   unchanged apart from the new documentation checks.
+
+# C++ port ([`TASK_CPP.md`](TASK_CPP.md))
+
+## C++ step 1 — project foundation
+
+- The follow-up brief is committed verbatim as `docs/TASK_CPP.md`, next to the original
+  `docs/TASK.md`, so `PROGRESS.md` and this file can cite the step they are answering.
+  Like `TASK.md` it is an input to the project and is never edited afterwards.
+- **scikit-build-core replaces the `setup.py` `Pybind11Extension`.** Step 7 of the
+  original brief chose setuptools because the C++ was one file and the project already
+  used that backend; a real CMake library with its own test and benchmark targets needs
+  CMake to drive the build, and scikit-build-core is what the brief asks for.
+- **The graceful "no compiler, no problem" fallback is gone.** `pip install -e .` now
+  fails if the core will not compile, because from step 5 the C++ backend is the default
+  and a silently missing core would mean silently running the reference implementation
+  at a tenth of the speed. `grid_astar/backend.py` still falls back to Python when the
+  extension is absent, so an in-tree checkout without a build still runs, but nothing
+  hides a failed build any more.
+- **GoogleTest and Google Benchmark are fetched, never vendored**, and only by the
+  standalone developer build (`DEPOT_BUILD_TESTS` / `DEPOT_BUILD_BENCH`, both `OFF` by
+  default). `pip install -e .` therefore needs no network beyond PyPI, and CI fetches
+  them once for the C++ job. No third-party source enters this repository.
+- The pybind11 module keeps the name `depot_planner._cpp` and the existing
+  `grid_astar(...)` signature, so step 1 is a move rather than a behaviour change; the
+  Python-side tests that pin the two backends together are unchanged and still pass.
+- `depot_core` is a static library with `POSITION_INDEPENDENT_CODE`, so the same objects
+  link into the extension module, the GoogleTest binary and the benchmark binary. Nothing
+  is compiled twice with different flags.
+- The C++ tests are *unit* tests of the core's own invariants (cost accounting,
+  neighbourhood, corner cutting, budgets, weighted-A* bound). Equivalence with the Python
+  reference stays a pytest concern, because that is where both implementations can be run
+  on the same inputs.
+- Benchmarks build their scenarios in C++ rather than loading them from the Python
+  generators, so `make cpp-bench` needs no interpreter and every run times the same work.
+- `.clang-format` is Google style at 100 columns, matching the Python side's line length.
+  `make format` rewrites in place; `make format-check` is the CI-friendly dry run.
