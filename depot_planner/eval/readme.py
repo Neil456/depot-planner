@@ -42,6 +42,7 @@ REGION_NAMES: tuple[str, ...] = (
 def _grid_table(frame: pd.DataFrame) -> str:
     return helpers.markdown_table(summarise_grid(frame), [
         ("algorithm", "algorithm", ""),
+        ("backend", "backend", ""),
         ("mean_cost_ratio", "cost / optimal", ".4f"),
         ("mean_nodes_expanded", "nodes expanded", ".0f"),
         ("mean_runtime_ms", "mean ms", ".2f"),

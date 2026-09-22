@@ -59,12 +59,15 @@ with the frame where it failed.
 
 ### Grid search, 100 start/goal pairs
 
+Timed on whichever backend is the default here; the `backend` column says which,
+and the [C++ core](#c-core) section below compares the two directly.
+
 <!-- BEGIN GENERATED: grid_table -->
-| algorithm | cost / optimal | nodes expanded | mean ms |
-| :-- | :-- | :-- | :-- |
-| Dijkstra | 1.0000 | 1479 | 0.29 |
-| A* | 1.0000 | 348 | 0.09 |
-| Weighted A* (w=1.5) | 1.0297 | 96 | 0.03 |
+| algorithm | backend | cost / optimal | nodes expanded | mean ms |
+| :-- | :-- | :-- | :-- | :-- |
+| Dijkstra | cpp | 1.0000 | 1479 | 0.28 |
+| A* | cpp | 1.0000 | 348 | 0.09 |
+| Weighted A* (w=1.5) | cpp | 1.0297 | 96 | 0.03 |
 <!-- END GENERATED: grid_table -->
 
 A\* and Dijkstra agree on cost to the last decimal on every pair, which is the
@@ -167,14 +170,15 @@ rendering the wrong frame. Found only when the images were first looked at.
 `cpp/grid_astar.cpp` is a C++17 port of the grid search exposed through pybind11,
 with the same neighbourhood, cost rule, heuristic and tie-breaking. It is
 optional: without a compiler the build warns and the pure-Python search is used
-instead. Best of three runs per problem, on the same pairs as the table above.
+instead. Best of three runs per problem, on the same 100 start/goal pairs as the
+grid table in Results.
 
 <!-- BEGIN GENERATED: cpp_table -->
 | algorithm | Python ms | C++ ms | speedup | identical paths |
 | :-- | :-- | :-- | :-- | :-- |
-| Dijkstra | 8.7820 | 0.2931 | 30.0 | yes |
-| A* | 2.4762 | 0.0998 | 23.1 | yes |
-| Weighted A* (w=1.5) | 0.7707 | 0.0529 | 13.3 | yes |
+| Dijkstra | 8.6980 | 0.2983 | 29.0 | yes |
+| A* | 2.4435 | 0.1022 | 22.4 | yes |
+| Weighted A* (w=1.5) | 0.7687 | 0.0528 | 13.4 | yes |
 <!-- END GENERATED: cpp_table -->
 
 ## Quickstart
