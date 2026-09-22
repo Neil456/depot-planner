@@ -139,8 +139,10 @@ class BaselineReplanPlanner(Planner):
         drivable[cell[1], cell[0]] = cached.drivable[cell[1], cell[0]]
         cost_map[cell[1], cell[0]] = cached.cost_map[cell[1], cell[0]]
 
+        budget_ms = cfg.get("time_limit_ms")
         result = astar(cost_map, cell, scenario.goal, drivable=drivable,
-                       min_cell_cost=cached.min_cell_cost, collect_expanded=False)
+                       min_cell_cost=cached.min_cell_cost, collect_expanded=False,
+                       time_limit_ms=None if budget_ms is None else float(budget_ms))
         runtime_ms = (time.perf_counter() - began) * 1000.0
 
         if result.success:

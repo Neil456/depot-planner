@@ -9,7 +9,9 @@ spacetime:
   heuristic_includes_time: true    # add chebyshev(steps) * time_cost; still admissible
   max_time_horizon: 700    # hard cap on t
   max_nodes: 120000        # hard cap on expansions; bounds the cost of a hopeless replan
+  time_limit_ms: null      # optional wall-clock budget per replan; null = unlimited
 
 baseline:
   inflate: 1               # same safety margin, but agents are frozen where they are now
   hold_on_failure: true    # when no path exists the baseline waits one step and retries
+  time_limit_ms: null      # optional wall-clock budget per replan; null = unlimited

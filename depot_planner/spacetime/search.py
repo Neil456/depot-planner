@@ -109,6 +109,8 @@ def plan(
     kind = str(cfg["heuristic"]).lower()
     horizon_cap = int(max_time if max_time is not None else cfg["max_time_horizon"])
     max_nodes = int(cfg["max_nodes"])
+    budget_ms = cfg.get("time_limit_ms")
+    budget_ms = None if budget_ms is None else float(budget_ms)
 
     cost = np.asarray(cost_map, dtype=float)
     mask = np.asarray(drivable, dtype=bool) & np.isfinite(cost)
@@ -185,6 +187,8 @@ def plan(
 
         if nodes_expanded >= max_nodes:
             return fail("node limit reached", expanded, nodes_expanded)
+        if budget_ms is not None and elapsed_ms() > budget_ms:
+            return fail("time limit reached", expanded, nodes_expanded)
         if ct >= horizon_cap:
             continue
 
