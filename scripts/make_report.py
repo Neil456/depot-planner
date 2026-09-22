@@ -12,7 +12,6 @@ purely to render the frame where they failed and to read off a diagnosis.
 from __future__ import annotations
 
 import math
-import shutil
 import time
 from pathlib import Path
 
@@ -50,13 +49,6 @@ from depot_planner.world.scenarios import generate_scenario
 
 ASSETS = results_path("README_assets").parent / "README_assets"
 FIGURES = ASSETS / "report"
-
-#: The three GIFs README.md embeds, and where they come from.
-README_GIFS = (
-    ("gifs/crossing_spacetime_astar.gif", "spacetime_waits_for_traffic.gif"),
-    ("gifs/crossing_baseline_replan.gif", "baseline_collides_same_scenario.gif"),
-    ("gifs/parking/perpendicular_reverse.gif", "hybrid_astar_reverse_parking.gif"),
-)
 
 
 # ------------------------------------------------------------------- loading
@@ -357,23 +349,6 @@ def failure_section(frames: dict[str, pd.DataFrame]) -> str:
     return "\n".join(lines) + "\n"
 
 
-# ------------------------------------------------------------------- assets
-
-
-def copy_readme_gifs() -> list[tuple[str, bool]]:
-    copied: list[tuple[str, bool]] = []
-    ASSETS.mkdir(parents=True, exist_ok=True)
-    for source_name, target_name in README_GIFS:
-        source = results_path(*source_name.split("/"))
-        target = ASSETS / target_name
-        if source.is_file():
-            shutil.copyfile(source, target)
-            copied.append((target_name, True))
-        else:
-            copied.append((target_name, False))
-    return copied
-
-
 # ------------------------------------------------------------------- report
 
 
@@ -496,10 +471,6 @@ def main() -> None:
     out = REPO_ROOT / "REPORT.md"
     out.write_text(text, encoding="utf-8")
     print(f"wrote {out}")
-
-    for name, ok in copy_readme_gifs():
-        status = "copied" if ok else "MISSING (run `make gifs` first)"
-        print(f"  README asset {name}: {status}")
 
 
 if __name__ == "__main__":

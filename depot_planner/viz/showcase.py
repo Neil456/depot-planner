@@ -48,10 +48,27 @@ PLANNER_LABELS = {
     "baseline_replan": "Replanning baseline",
 }
 
+PARKING_LABELS = {
+    "parallel": "parallel park",
+    "perpendicular_forward": "forward into a bay",
+    "perpendicular_reverse": "reverse into a bay",
+    "tight": "minimal-clearance park",
+    "parallel_minimal": "parallel park, minimal gap",
+    "perpendicular_minimal": "bay park, minimal width",
+}
+
 
 def planner_label(name: str) -> str:
     """Human-readable planner name for a title."""
     return PLANNER_LABELS.get(name, name)
+
+
+def parking_title(scenario) -> str:
+    """Title for a parking animation, naming the manoeuvre rather than the type."""
+    label = PARKING_LABELS.get(scenario.name, scenario.name)
+    if scenario.layout != scenario.name:
+        label = f"{label} via {PARKING_LABELS.get(scenario.layout, scenario.layout)}"
+    return f"Hybrid A* — {label} (seed {scenario.seed})"
 
 
 def legend_handles(include_yield: bool = True) -> list[Any]:
@@ -251,6 +268,87 @@ def side_by_side_gif(
                        else "collides" if episode.collision else "runs out of time")
             draw_episode_frame(ax, scenario, episode, local,
                                subtitle=f"{planner_label(name)} — {outcome}")
+        frames.append(_capture(fig))
+    frames.extend([frames[-1]] * max(1, int(cfg["hold_frames"])))
+    plt.close(fig)
+    return _write_gif(path, frames, fps)
+
+
+def parking_legend_handles() -> list[Any]:
+    """Proxy artists for the parking showcase."""
+    from depot_planner.viz.parking import PARKED_COLOR
+
+    return [
+        Patch(facecolor=PALETTE["ego"], edgecolor="white", label="ego driving forward"),
+        Patch(facecolor=PALETTE["yield"], edgecolor="white", label="ego reversing"),
+        Patch(facecolor=PARKED_COLOR, edgecolor="white", label="parked cars"),
+        Line2D([], [], color=PALETTE["ego"], linewidth=2.2, label="forward path"),
+        Line2D([], [], color=PALETTE["yield"], linewidth=2.2, label="reverse path"),
+        Line2D([], [], color=PALETTE["goal"], linewidth=1.8, label="goal pose"),
+    ]
+
+
+def parking_gif(
+    scenario,
+    result,
+    path: Path | str,
+    config: dict[str, Any] | None = None,
+) -> Path:
+    """Write the polished parking animation for the README.
+
+    Forward and reverse motion are coloured differently, both in the trail and
+    in the car body, so the direction switches read at a glance. The explored
+    states appear as faint dots in the first frame.
+    """
+    from depot_planner.hybrid.car import CarModel
+    from depot_planner.viz import parking as parking_viz
+
+    cfg = (config if config is not None else load_config("eval"))["showcase"]
+    fps = int(cfg["fps"])
+    dpi = int(cfg["dpi"])
+    width_in = int(cfg["parking_width_px"]) / dpi
+    car = CarModel.from_config(scenario.hybrid_config)
+    poses = result.poses or [scenario.start]
+    directions = result.directions or [1]
+    aspect = scenario.height_m / max(scenario.width_m, 1e-6)
+    height_in = width_in * aspect * 0.96 + 1.5
+
+    fig = plt.figure(figsize=(width_in, height_in), dpi=dpi)
+    ax = fig.add_axes((0.02, 0.145, 0.96, 0.735))
+    fig.suptitle(parking_title(scenario), fontsize=12, y=0.975, color="#22272e")
+    fig.legend(handles=parking_legend_handles(), loc="lower center", ncol=6, fontsize=8,
+               frameon=False, bbox_to_anchor=(0.5, 0.005))
+
+    indices = _frame_indices(len(poses), int(cfg["max_frames"]))
+    total = result.path_length_m
+    frames = []
+    for frame_number, index in enumerate(indices):
+        ax.clear()
+        parking_viz.setup_axes(ax, scenario)
+        if frame_number == 0:
+            parking_viz.draw_explored(ax, result.explored, alpha=0.5)
+        for step in range(index):
+            colour = PALETTE["ego"] if directions[step] >= 0 else PALETTE["yield"]
+            ax.plot([poses[step][0], poses[step + 1][0]], [poses[step][1], poses[step + 1][1]],
+                    color=colour, linewidth=2.2, solid_capstyle="round", zorder=4)
+        parking_viz.draw_car(ax, car, scenario.goal, PALETTE["goal"], linewidth=1.6)
+        gear = directions[min(index, len(directions) - 1)]
+        colour = PALETTE["ego"] if gear >= 0 else PALETTE["yield"]
+        parking_viz.draw_car(ax, car, poses[index], colour, alpha=0.95, linewidth=1.6,
+                             fill=True, zorder=8)
+        travelled = sum(
+            math.hypot(b[0] - a[0], b[1] - a[1])
+            for a, b in zip(poses[: index + 1], poses[1: index + 1])
+        )
+        label = "reversing" if gear < 0 else "driving forward"
+        if index == len(poses) - 1:
+            label = "parked"
+        ax.text(0.01, 0.96, f"{label}   {travelled:4.1f} m of {total:4.1f} m   "
+                            f"{result.direction_switches} direction changes",
+                transform=ax.transAxes, ha="left", va="top", fontsize=8.5, color="#22272e",
+                zorder=10,
+                bbox=dict(boxstyle="round,pad=0.32", facecolor="white", alpha=0.85,
+                          edgecolor="none"))
         frames.append(_capture(fig))
     frames.extend([frames[-1]] * max(1, int(cfg["hold_frames"])))
     plt.close(fig)
