@@ -511,3 +511,27 @@ One line per decision: what was chosen and why.
   from one implementation rather than two that have to be kept in step.
 - The C++ loop refuses a planner it does not implement, and refuses one pinned to
   `backend="python"`, rather than silently falling back to the Python loop.
+
+## C++ step 8 — docs
+
+- The README's "C++ core" section became an **architecture** section: a table of what runs
+  where, then three short answers — why the split falls where it does, why the Python
+  planners are kept, and why the two independent checkers are not moved next to the code
+  they audit. A reader who wants to know whether this is a rewrite or a port should not have
+  to read the commit log to find out.
+- Build instructions say plainly that `pip install -e .` needs only a compiler, CMake and
+  pybind11, and that GoogleTest and Google Benchmark are fetched by the *developer* build
+  alone. That is the question someone cloning the repository actually has.
+- The numerics paragraph is in the README rather than only in this file, because "the C++
+  gives identical results" is the project's central claim and the three CPython-specific
+  functions behind it (`math.hypot`, float `%`, float `//`) are the least obvious part of
+  making it true.
+- A fourth entry joins "Bugs found by the evaluation harness": the benchmark scenario that
+  blocked both connectors and so measured 717k expansions of an unreachable search. It
+  belongs there for the same reason the others do — it was caught by looking at a number
+  that did not make sense, not by reading the code.
+- The "hard tier is not bit-reproducible" limitation was rewritten rather than deleted. It is
+  now the sharper statement: it is the one place where the implementation changes the result,
+  which is why both backends are reported.
+- `CLAUDE.md` gained the two rules this port ran on: never change the reference to make a
+  port pass, and keep `sim/collision.py` independent of planner code.

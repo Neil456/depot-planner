@@ -1,6 +1,6 @@
 # Depot Planner
 
-Motion planning for a vehicle depot seen from above: grid A\* for routing, space-time A\* for driving through moving traffic, and hybrid A\* for parking a car-shaped vehicle — with a seeded evaluation harness that scores all of it and an independent collision checker that audits every plan.
+Motion planning for a vehicle depot seen from above: grid A\* for routing, space-time A\* for driving through moving traffic, and hybrid A\* for parking a car-shaped vehicle. The planners are a C++17 library; Python drives the seeded evaluation harness that scores them and the independent collision checkers that audit every plan.
 
 [![tests](https://github.com/Neil456/depot-planner/actions/workflows/tests.yml/badge.svg)](https://github.com/Neil456/depot-planner/actions/workflows/tests.yml)
 
@@ -16,6 +16,12 @@ planner runs in closed loop against traffic that does not care about it, and
 every trajectory is re-checked by a collision checker that shares no code with
 any planner. When the checker and a planner disagree, the harness raises rather
 than recording a pass. It has caught real bugs, which are listed below.
+
+The planners themselves are a C++17 library, with the original Python ones kept
+as the reference implementation and tested against on every battery seed. That
+turned out to matter for more than speed: under a 50 ms per-replan budget, the
+same planner on the same seeds goes from half the episodes to all of them purely
+because the search now fits in the budget. See [C++ core](#c-core).
 
 ## Planners
 
@@ -168,25 +174,68 @@ existed — enough for a plan to shave a parked car's corner. Fixed at the sourc
 by storing `max(edt - √2, 0) · resolution`, which makes the stored value a true
 lower bound, rather than by loosening the checker.
 
-**The C++ port diverged on paths, not costs.** The C++ core matched the Python
-search's cost on every one of 600 comparisons but returned a different path on 34
-of them. The Python heap pushes `(f, g, counter, cell)`, so ties on `f` break
-towards the smaller `g`; the C++ comparator only had `(f, order)`. A test now
-pins path, cost and expansion count together, which is what caught it.
+**The C++ port diverged on paths, not costs.** The first version of the C++
+grid search matched the Python one's cost on every comparison but returned a
+different path on 34 of 600 of them. The Python heap pushes
+`(f, g, counter, cell)`, so ties on `f` break towards the smaller `g`; the C++
+comparator only had `(f, order)`. Comparing cost alone would have called that a
+success. The equivalence tests now pin path, cost and expansion count together,
+which is what caught it and what every later port was held to.
 
 **Failure frames showing the wrong moment.** The runner handed the collision
 checker a two-step window, so the recorded collision index was always 0 or 1
 instead of a position in the trajectory — every failure image in the report was
 rendering the wrong frame. Found only when the images were first looked at.
 
+**A benchmark measuring a hopeless search.** The first C++ benchmark scenario
+parked traffic in both vertical connectors, which left the goal unreachable, so
+"space-time A\* on a congested depot" was really 717k expansions of a search
+that could never finish. The giveaway was two different heuristics reporting the
+same expansion count. The agents now pull into the parking band beside their
+lane, as the scenario generator's traffic does.
+
 ## C++ core
 
-All three planners are a C++17 library under `cpp/` (`depot_core`), exposed
-through pybind11 and built by `pip install -e .` via scikit-build-core. Python
-keeps what it is good at: scenario generation, the closed-loop orchestration,
-the two independent collision checkers, plotting and reports. The pure-Python
-planners stay in the tree as the **reference implementation** and still run on
-`--backend python`; every C++ plan is verified against them.
+Everything on the critical path is a C++17 library under `cpp/` (`depot_core`),
+exposed through pybind11 and built by `pip install -e .` via scikit-build-core.
+
+| in C++ | in Python |
+| :-- | :-- |
+| grid search — Dijkstra, A\*, weighted A\*, the Dijkstra cost-to-go field | scenario generation: depot maps, traffic timelines, parking layouts |
+| the exact Euclidean distance transform behind both distance fields | the two **independent collision checkers** that audit every plan |
+| space-time A\* over `(x, y, t)` and the snapshot baseline | orchestration: tiers, seeds, batteries, CSVs |
+| hybrid A\* — bicycle model, primitives, disc collision, Reeds-Shepp | plotting, GIFs, and generating REPORT.md and this file |
+| the closed-loop episode runner (opt-in, see below) | the pure-Python planners, kept as the **reference implementation** |
+
+**Why this split.** The planners are where the time goes and where a tight inner
+loop pays: an A\* expansion is a handful of arithmetic operations and a heap
+push, and in Python the interpreter overhead dwarfs the work. Everything else —
+generating a scenario once, writing a CSV, drawing a GIF — is glue, and moving
+it to C++ would buy nothing while making it harder to change.
+
+**Why the Python planners are still here.** They are the specification. Every
+C++ plan is verified against them on the same inputs, and `--backend python`
+runs them end to end. `scripts/check_equivalence.py` compares the two on every
+battery seed of both tiers; it reports identical plans, costs and expansion
+counts, and hands every C++ parking plan to the independent checker as well.
+
+**Why the collision checkers are Python and stay Python.** They exist to
+disagree with the planners. `sim/collision.py` re-derives from the grid and the
+agent timelines whether an executed trajectory was legal, and
+`sim/car_collision.py` does the same for a parking plan using exact rectangles
+and the separating-axis test rather than the planner's discs. Neither shares a
+line with any planner, and both caught real bugs. Moving them next to the code
+they audit would quietly weaken that.
+
+**Getting "identical" to mean identical.** Three CPython-specific numerics had
+to be reimplemented rather than assumed. `math.hypot` is not the platform
+`hypot` — CPython has its own correctly-rounded norm, and over 200k random pairs
+`std::hypot` disagreed with it on 0.6% of them by one ulp, which is enough to
+reorder hybrid A\*'s open list and return a different (equally good) path.
+Python's float `%` takes the sign of the divisor where C's `fmod` takes the sign
+of the dividend, and Python's `//` is derived from the remainder rather than
+being `floor(a / b)`. numpy's array `cos` and `sin` were measured against the
+scalar ones rather than assumed, and do agree here.
 
 Each case below is run five times per backend and the median kept, on the same
 prepared inputs with scenario setup excluded from the clock.
@@ -204,9 +253,29 @@ prepared inputs with scenario setup excluded from the clock.
 ## Quickstart
 
 ```bash
-pip install -e ".[dev]"   # builds the C++ core via scikit-build-core
-make test                 # the test suite
-make all                  # setup, tests, batteries, GIFs and the report (~12 min)
+pip install -e ".[dev]"   # builds depot_core and the extension via scikit-build-core
+make test                 # the Python suite (exercises both backends)
+make all                  # setup, tests, batteries, GIFs and the report (~4 min)
+```
+
+A compiler, CMake 3.20+ and pybind11 are all `pip install -e .` needs; it never
+downloads GoogleTest or Google Benchmark. Those are fetched by CMake only for
+the standalone developer build:
+
+```bash
+make cpp-test             # configure, build and ctest the core (fetches GoogleTest)
+make cpp-bench            # the Google Benchmark suite
+make format               # clang-format the C++ sources in place
+make format-check         # the CI-friendly dry run
+```
+
+Both implementations are reachable from the command line:
+
+```bash
+python3 scripts/run_battery.py --backend python   # the reference planners
+python3 scripts/run_battery.py --engine cpp       # the closed loop in C++ too
+python3 scripts/check_equivalence.py              # compare them on every seed
+python3 scripts/bench_cpp.py                      # regenerate the table above
 ```
 
 Individual stages: `make step1`, `make battery`, `make gifs`, `make report`.
@@ -216,30 +285,33 @@ parameters — lives in `configs/*.yaml`, never in the code.
 ## Layout
 
 ```
-depot_planner/
-  world/        maps, cost maps, moving-agent scenarios, parking scenarios
-  grid_astar/   the generic best-first search and the C++ backend dispatch
-  spacetime/    (x, y, t) search and the two planner wrappers
-  hybrid/       car model, distance-field collision, Reeds-Shepp, hybrid A*
-  sim/          closed-loop runner and two independent collision checkers
-  viz/          top-down renderer, episode GIFs, parking GIFs, showcase GIFs
-  eval/         batteries, benchmarks, report and README generation
-cpp/
-  include/depot/  public headers of the C++17 planning core
-  src/            its implementation
-  bindings/       the pybind11 module (depot_planner._cpp)
-  tests/          GoogleTest suite
-  bench/          Google Benchmark suite
-configs/        every tunable parameter
-scripts/        one CLI entry point per Makefile target
-tests/          the test suite
-docs/           the original brief, progress log and decision log
-results/        generated; gitignored except results/README_assets/
+cpp/                    the C++17 planning core
+  include/depot/        public headers: types, grid search, distance field,
+                        space-time A*, car model, Reeds-Shepp, hybrid A*, runner
+  src/                  their implementations
+  bindings/             the pybind11 module (depot_planner._cpp)
+  tests/                GoogleTest suite
+  bench/                Google Benchmark suite, on scenarios built in C++
+depot_planner/          the Python side
+  core.py               which backend a call runs on
+  world/                maps, cost maps, moving-agent scenarios, parking scenarios
+  grid_astar/           the reference best-first search and the backend dispatch
+  spacetime/            the reference (x, y, t) search and the planner wrappers
+  hybrid/               reference car model, disc collision, Reeds-Shepp, hybrid A*
+  sim/                  closed-loop runner and two independent collision checkers
+  viz/                  top-down renderer, episode GIFs, parking GIFs, showcase GIFs
+  eval/                 batteries, benchmarks, report and README generation
+configs/                every tunable parameter
+scripts/                one CLI entry point per Makefile target
+tests/                  the Python test suite, including the equivalence checks
+docs/                   the two briefs, the progress log and the decision log
+results/                generated; gitignored except results/README_assets/
 ```
 
 [docs/DECISIONS.md](docs/DECISIONS.md) records every judgement call and why.
 [docs/PROGRESS.md](docs/PROGRESS.md) tracks what is done. [docs/TASK.md](docs/TASK.md)
-is the original brief this was built against.
+is the original brief and [docs/TASK_CPP.md](docs/TASK_CPP.md) the follow-up one
+that moved the planners into C++.
 
 ## Limitations
 
@@ -262,7 +334,9 @@ Worth being straight about what these scenarios do and do not model.
   is the standard one and is not a proven lower bound in every obstacle layout,
   and the Reeds-Shepp word set covers the CSC, CCC and SCS families rather than
   all 48 words.
-- **The hard tier's wall-clock budget is not bit-reproducible.** How much search
-  fits in 50 ms depends on the machine. Re-running it left every
-  success/collision/timeout value identical but moved the per-episode expansion
-  counts; see REPORT.md.
+- **The hard tier's wall-clock budget is not bit-reproducible, and it is the
+  one place the implementation changes the result.** How much search fits in
+  50 ms depends on how fast the planner runs and on the machine it runs on. One
+  hard seed re-run four times on the same build gives four different expansion
+  counts and four different paths. That is why the hard tier is reported on both
+  backends rather than only the fast one; see REPORT.md section 5.
