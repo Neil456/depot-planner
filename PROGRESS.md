@@ -13,7 +13,12 @@ Read this first. Status of each step from `TASK.md`.
       margin + swap rules, admissible Dijkstra-field heuristic, and the replanning
       baseline. The independent collision checker was pulled forward from step 4
       because step 3's check needs it. 57 tests green.
-- [ ] Step 4: Closed-loop simulator and scenario battery
+- [x] **Step 4: Closed-loop simulator and scenario battery** — done. Runner replans on a
+      cadence and checks every executed step against the independent checker; battery of
+      300 episodes (30 per type x 5 types x 2 planners) in 33 s ->
+      `results/battery_spacetime.csv`; 10 GIFs in `results/gifs/`, largest 0.15 MB.
+      Space-time A*: 100% success, 0 collisions. Baseline: 5 collisions on `crossing`,
+      2 on `congested`. 79 tests green.
 - [ ] Step 5: Hybrid A* parking
 - [ ] Step 6: Report and README
 - [ ] Step 7 (optional): C++ core for grid A*

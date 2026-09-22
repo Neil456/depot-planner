@@ -1,0 +1,24 @@
+# Scenario battery and report generation (steps 4 and 6).
+battery:
+  episodes_per_type: 30
+  seed_offset: 1000        # battery seeds are offset from the demo/test seeds
+  planners: [spacetime_astar, baseline_replan]
+
+grid_benchmark:
+  pairs: 100               # start/goal pairs for the step-1 table
+  map_seed: 0
+  sample_seed: 4242
+  min_separation: 20.0
+
+animation:
+  fps: 8
+  step_stride: 1           # draw every Nth simulation step
+  max_frames: 140
+  dpi: 70
+  figure_size: [6.4, 4.4]
+
+parking_animation:
+  fps: 10
+  dpi: 80
+  figure_size: [5.6, 5.0]
+  max_frames: 160

@@ -240,6 +240,7 @@ def test_the_baseline_ignores_the_future_and_can_plan_through_moving_traffic():
 
     scenario = Stub()
     scenario.grid, scenario.agents, scenario.goal = grid, agents, (12, 2)
+    scenario.time_limit = 60
     baseline = make_planner("baseline_replan").plan(scenario, (0, 2), 0)
     timed = make_planner("spacetime_astar").plan(scenario, (0, 2), 0)
     assert baseline.success and timed.success
@@ -256,6 +257,7 @@ def test_the_baseline_holds_position_when_it_is_boxed_in():
 
     scenario = Stub()
     scenario.grid, scenario.agents, scenario.goal = grid, [wall], (12, 2)
+    scenario.time_limit = 60
     result = make_planner("baseline_replan").plan(scenario, (0, 2), 0)
     assert result.success
     assert result.cells == [(0, 2), (0, 2)]

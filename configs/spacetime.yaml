@@ -8,7 +8,7 @@ spacetime:
                            # per scenario) or 'octile' (step-1 octile x min cell cost)
   heuristic_includes_time: true    # add chebyshev(steps) * time_cost; still admissible
   max_time_horizon: 700    # hard cap on t
-  max_nodes: 400000        # hard cap on expansions
+  max_nodes: 120000        # hard cap on expansions; bounds the cost of a hopeless replan
 
 baseline:
   inflate: 1               # same safety margin, but agents are frozen where they are now
