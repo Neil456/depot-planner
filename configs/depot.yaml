@@ -1,0 +1,18 @@
+# Deterministic depot layout generator (step 1).
+width: 60                # metres (== cells at 1 m resolution)
+height: 40
+wall_thickness: 1
+
+aisles:
+  min_count: 2
+  max_count: 4
+  width: 4               # cells per horizontal aisle
+
+cross_aisles:
+  min_count: 2
+  max_count: 3
+  width: 3               # cells per vertical connector aisle
+
+curb:
+  min_band_depth: 5      # only bands at least this deep get a central curb
+  gap_period: 7          # every Nth cell along a curb is left open
