@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel", "pybind11>=2.11"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "depot-planner"
+version = "0.1.0"
+description = "Grid A*, space-time A* and hybrid A* parking planners for a 2D vehicle depot"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "imageio>=2.31",
+    "pyyaml>=6.0",
+    "pandas>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Neil456/depot-planner"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+[tool.setuptools.packages.find]
+include = ["depot_planner*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["ignore::DeprecationWarning"]

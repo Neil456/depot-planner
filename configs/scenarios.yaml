@@ -1,0 +1,55 @@
+# Timed world, other vehicles and scenario generators (step 2).
+dt: 0.25                   # seconds per simulation step
+ego_speed: 4.0             # m/s -> exactly one 1 m cell per step
+
+agent:
+  footprint: [2, 2]        # cells in x, y; fits a 4 m wide aisle
+  pause_probability: 0.12  # chance an agent stays put on any given step
+  min_route_cells: 8       # an agent route shorter than this is not interesting
+  max_route_attempts: 60
+
+scenario:
+  min_ego_separation: 30.0    # metres between ego start and goal
+  time_limit_factor: 4.0      # time limit = factor x length of the free-space route
+  min_time_limit: 160         # steps
+  max_time_limit: 600
+  max_generation_attempts: 80
+
+crossing:
+  min_arm_cells: 6            # half-length of the crossing agent's route
+  route_fraction: [0.30, 0.70]  # where along the ego route the crossing happens
+
+head_on:
+  min_segment_cells: 10       # the shared aisle stretch must be at least this long
+  route_fraction: [0.35, 0.85]
+
+blocked_then_clears:
+  route_fraction: [0.25, 0.60]
+  release_after_arrival: [5, 40]  # steps the blocker stays after the ego would arrive
+
+congested:
+  agent_count: [6, 10]
+
+# Hard tier (added after step 5). Each hard type names a base type and the
+# overrides applied on top of this file and configs/depot.yaml. The normal tier
+# above is untouched.
+hard:
+  congested_hard:
+    base: congested
+    scenarios:
+      congested:
+        agent_count: [12, 16]
+      scenario:
+        max_generation_attempts: 160
+  head_on_narrow:
+    base: head_on
+    depot:
+      aisles:
+        width: 3            # a 2-cell-wide vehicle plus its 1-cell margin fills it
+      cross_aisles:
+        width: 2
+    scenarios:
+      head_on:
+        min_segment_cells: 8
+      scenario:
+        max_generation_attempts: 160
