@@ -20,6 +20,7 @@ TIERS: tuple[str, ...] = ("normal", "hard")
 
 
 def parking_tier_settings(tier: str, config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The battery block for ``tier``."""
     if tier not in TIERS:
         raise ValueError(f"unknown tier {tier!r}; expected one of {TIERS}")
     cfg = config if config is not None else load_config("eval")
@@ -38,11 +39,13 @@ def tier_hybrid_config(tier: str, config: dict[str, Any] | None = None) -> dict[
 
 
 def parking_tier_csv(tier: str) -> str:
+    """Name of the CSV this tier writes."""
     return PARKING_CSV if tier == "normal" else HARD_PARKING_CSV
 
 
 def episode_row(scenario, result: HybridResult, verified: bool, detail: str,
                 tier: str = "normal") -> dict[str, Any]:
+    """One flat CSV record for a planned (or unplanned) parking scenario."""
     return {
         "tier": tier,
         "parking_type": scenario.name,
@@ -106,6 +109,7 @@ def run_parking_battery(
 
 
 def write_parking_battery(frame: pd.DataFrame, path: Path | str | None = None) -> Path:
+    """Write the scenario rows to CSV and return the path."""
     out = Path(path) if path is not None else results_path(PARKING_CSV)
     out.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(out, index=False)
@@ -132,5 +136,6 @@ def summarise_parking(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def parking_failures(frame: pd.DataFrame) -> pd.DataFrame:
+    """Every scenario the planner did not solve, ordered for the report."""
     failed = frame[~frame["success"]].copy()
     return failed.sort_values(["parking_type", "seed"]).reset_index(drop=True)

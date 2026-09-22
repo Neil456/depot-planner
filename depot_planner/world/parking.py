@@ -71,6 +71,7 @@ class ParkingScenario:
     # -------------------------------------------------------------- geometry
 
     def distance_field(self) -> DistanceField:
+        """The obstacle distance field, built once and cached."""
         if self._field is None:
             resolution = float(self.hybrid_config["collision"]["field_resolution"])
             self._field = DistanceField.from_rectangles(
@@ -79,6 +80,7 @@ class ParkingScenario:
         return self._field
 
     def checker(self, car: CarModel | None = None) -> CarCollisionChecker:
+        """A collision checker for this lot and car."""
         return CarCollisionChecker(self.distance_field(), car, self.hybrid_config)
 
     def heuristic_grid(self) -> tuple[np.ndarray, np.ndarray, float]:
@@ -103,6 +105,7 @@ class ParkingScenario:
         return self._heuristic
 
     def to_cell(self, x: float, y: float) -> tuple[int, int]:
+        """Coarse heuristic-grid cell containing a metric point."""
         _, _, resolution = self.heuristic_grid()
         return int(x // resolution), int(y // resolution)
 
@@ -113,6 +116,7 @@ class ParkingScenario:
         return dijkstra_field(cost_map, [goal_cell], drivable=drivable) * resolution
 
     def summary(self) -> dict[str, Any]:
+        """Compact description for logs and the report."""
         return {
             "parking_type": self.name,
             "layout": self.layout,

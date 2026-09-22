@@ -45,6 +45,7 @@ class HybridResult:
 
     @property
     def reverse_length_m(self) -> float:
+        """Total distance driven in reverse."""
         total = 0.0
         for index in range(len(self.poses) - 1):
             if self.directions[index] < 0:
@@ -54,6 +55,7 @@ class HybridResult:
 
     @property
     def has_reverse(self) -> bool:
+        """True if the plan reverses at any point."""
         return any(direction < 0 for direction in self.directions)
 
 
@@ -118,6 +120,7 @@ def heading_bin(theta: float, bins: int) -> int:
 
 
 def state_key(pose: Pose, xy_resolution: float, bins: int) -> Key:
+    """Discretise a continuous pose for duplicate detection."""
     return (
         int(math.floor(pose[0] / xy_resolution)),
         int(math.floor(pose[1] / xy_resolution)),
@@ -126,6 +129,7 @@ def state_key(pose: Pose, xy_resolution: float, bins: int) -> Key:
 
 
 def at_goal(pose: Pose, goal: Pose, position_tolerance: float, heading_tolerance: float) -> bool:
+    """True if ``pose`` is within both tolerances of ``goal``, wrapping the heading."""
     if math.hypot(pose[0] - goal[0], pose[1] - goal[1]) > position_tolerance:
         return False
     return abs(angle_difference(pose[2], goal[2])) <= heading_tolerance

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any, Callable, Sequence
 
 import pandas as pd
 
@@ -42,10 +42,12 @@ def tier_planner_config(tier: str, config: dict[str, Any] | None = None) -> dict
 
 
 def tier_csv(tier: str) -> str:
+    """Name of the CSV this tier writes."""
     return BATTERY_CSV if tier == "normal" else HARD_BATTERY_CSV
 
 
 def battery_seeds(count: int, offset: int) -> list[int]:
+    """The ``count`` consecutive seeds a tier uses, starting at ``offset``."""
     return [offset + i for i in range(count)]
 
 
@@ -101,6 +103,7 @@ def run_battery(
 
 
 def write_battery(frame: pd.DataFrame, path: Path | str | None = None) -> Path:
+    """Write the episode rows to CSV and return the path."""
     out = Path(path) if path is not None else results_path(BATTERY_CSV)
     out.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(out, index=False)

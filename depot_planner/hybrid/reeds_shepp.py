@@ -47,6 +47,7 @@ class RSPath:
 
     @property
     def n_direction_changes(self) -> int:
+        """How many times the curve switches between forward and reverse."""
         gears = [1 if s.length >= 0.0 else -1 for s in self.segments if abs(s.length) > 1e-9]
         return sum(1 for a, b in zip(gears, gears[1:]) if a != b)
 
@@ -204,4 +205,5 @@ def interpolate(
 
 
 def path_length_m(path: RSPath, car: CarModel) -> float:
+    """Curve length in metres for a given car's turning radius."""
     return path.length * car.min_turning_radius

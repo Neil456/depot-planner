@@ -8,7 +8,6 @@ built, everything falls back to the Python implementation.
 from __future__ import annotations
 
 import math
-from typing import Any
 
 import numpy as np
 
@@ -28,6 +27,7 @@ def extension_available() -> bool:
 
 
 def backend_name() -> str:
+    """``"cpp"`` when the compiled core is importable, else ``"python"``."""
     return "cpp" if extension_available() else "python"
 
 
@@ -57,6 +57,7 @@ def effective_cost_map(cost_map: np.ndarray, drivable: np.ndarray | None) -> np.
 
 
 def min_finite(cost_map: np.ndarray) -> float:
+    """Cheapest finite (drivable) cell cost, the heuristic scale the core derives."""
     finite = np.isfinite(cost_map)
     return float(cost_map[finite].min()) if finite.any() else 0.0
 

@@ -77,6 +77,7 @@ def compare_backends(
 
 
 def write_cpp_benchmark(frame: pd.DataFrame, path: Path | str | None = None) -> Path:
+    """Write the timing rows to CSV and return the path."""
     out = Path(path) if path is not None else results_path(CPP_CSV)
     out.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(out, index=False)
@@ -84,6 +85,7 @@ def write_cpp_benchmark(frame: pd.DataFrame, path: Path | str | None = None) -> 
 
 
 def summarise_cpp(frame: pd.DataFrame) -> pd.DataFrame:
+    """Per-algorithm means, plus whether the two backends agreed exactly."""
     return frame.groupby("algorithm", sort=False).agg(
         pairs=("pair", "nunique"),
         mean_python_ms=("python_ms", "mean"),

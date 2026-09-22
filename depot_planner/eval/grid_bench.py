@@ -64,6 +64,7 @@ def run_grid_benchmark(
 
 
 def write_grid_benchmark(frame: pd.DataFrame, path: Path | str | None = None) -> Path:
+    """Write the benchmark rows to CSV and return the path."""
     out = Path(path) if path is not None else results_path(GRID_CSV)
     out.parent.mkdir(parents=True, exist_ok=True)
     frame.to_csv(out, index=False)

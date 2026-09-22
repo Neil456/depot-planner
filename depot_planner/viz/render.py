@@ -14,7 +14,7 @@ import numpy as np
 from matplotlib.colors import ListedColormap
 
 from depot_planner.grid_astar.search import SearchResult
-from depot_planner.world.grid import CellType, Grid
+from depot_planner.world.grid import Grid
 
 Cell = tuple[int, int]
 
@@ -216,7 +216,6 @@ __all__ = [
     "draw_ego",
     "save_scenario_png",
     "EGO_COLOR",
-    "CellType",
     "draw_endpoints",
     "draw_expanded",
     "draw_map",

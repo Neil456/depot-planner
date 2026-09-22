@@ -45,17 +45,21 @@ class Grid:
 
     @property
     def height(self) -> int:
+        """Number of rows."""
         return int(self.cells.shape[0])
 
     @property
     def width(self) -> int:
+        """Number of columns."""
         return int(self.cells.shape[1])
 
     @property
     def shape(self) -> tuple[int, int]:
+        """``(height, width)`` in cells."""
         return self.height, self.width
 
     def in_bounds(self, x: int, y: int) -> bool:
+        """True if ``(x, y)`` is inside the grid."""
         return 0 <= x < self.width and 0 <= y < self.height
 
     # --------------------------------------------------------------- drivable
@@ -66,6 +70,7 @@ class Grid:
         return self.cells != CellType.OBSTACLE
 
     def is_drivable(self, x: int, y: int) -> bool:
+        """True if ``(x, y)`` is in bounds and not an obstacle."""
         return self.in_bounds(x, y) and bool(self.cells[y, x] != CellType.OBSTACLE)
 
     # -------------------------------------------------------------- cost maps
@@ -123,6 +128,7 @@ class Grid:
     # ------------------------------------------------------------------ misc
 
     def copy(self) -> "Grid":
+        """An independent copy sharing the same config."""
         return Grid(self.cells.copy(), self.resolution, self.config)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid

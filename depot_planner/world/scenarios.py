@@ -15,7 +15,7 @@ returning: the goal must still be reachable once the agents have come to rest.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Sequence
+from typing import Any, Sequence
 
 import numpy as np
 
@@ -96,6 +96,7 @@ class Scenario:
         return Grid(grid.cells, grid.resolution, grid.config)
 
     def summary(self) -> dict[str, Any]:
+        """Compact description for logs and the report."""
         return {
             "scenario": self.name,
             "base": self.base or self.name,
@@ -437,13 +438,3 @@ def generate_scenario(
     raise ScenarioGenerationError(
         f"could not generate scenario {name!r} for seed {seed}: {last_failure}"
     )
-
-
-def generate_batch(name: str, seeds: Sequence[int], config: dict[str, Any] | None = None) -> list[Scenario]:
-    """Generate one scenario per seed."""
-    return [generate_scenario(name, int(seed), config) for seed in seeds]
-
-
-def scenario_generators() -> dict[str, Callable[..., Scenario]]:
-    """Mapping from scenario name to a single-argument generator (for tests/CLI)."""
-    return {name: (lambda seed, n=name: generate_scenario(n, seed)) for name in ALL_SCENARIO_TYPES}

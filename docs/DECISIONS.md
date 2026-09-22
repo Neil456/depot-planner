@@ -221,3 +221,42 @@ One line per decision: what was chosen and why.
 - The core is not used where the caller wants `expanded` (the step-1 figures) or a
   heuristic scale that disagrees with the grid minimum, because either would change the
   search rather than just speed it up.
+
+## Public-repo polish pass
+
+- **README numbers are generated, not typed.** Every metric in `README.md` sits between
+  `<!-- BEGIN GENERATED: name -->` markers and is rewritten by
+  `depot_planner/eval/readme.py` from the same CSVs the report reads; `make report` runs it
+  after `make_report.py` so the two documents cannot disagree. A test asserts that the
+  committed README is byte-identical to what the generator produces, so a stale hand-edited
+  table fails CI.
+- The two "findings" paragraphs in the README are generated too, including their wording.
+  The first draft asserted that the ordering "reverses" on `congested_hard` when both
+  planners in fact score 66.7%; the generator now picks its verb from the comparison and
+  describes the differing *failure modes* instead, which is the real point.
+- Prose keeps no metrics at all. An earlier draft called the baseline "20x cheaper"; that
+  ratio changed the moment the C++ core landed, so the claim is gone and the tables carry it.
+- **Hero GIF** is the space-time crossing episode rather than a parking manoeuvre: it is the
+  one frame that shows the thing the project is actually about (planning in time), and the
+  same seed gives the side-by-side against the baseline. The seed is chosen by
+  `eval/showcase.best_contrast_episode` from the battery's own seed slice, so the GIFs
+  always show a real battery episode and regenerate identically.
+- The showcase animations fix the axes rectangle instead of using `tight_layout`, because a
+  per-frame layout pass changes the figure's pixel size when the title text changes and GIF
+  writers require every frame to match.
+- A yielding ego gets an amber halo and a status line; the halo is suppressed on a collision
+  frame so it never stacks under the red collision ring.
+- `docs/`: `TASK.md`, `PROGRESS.md` and `DECISIONS.md` moved there, with `CLAUDE.md` and
+  `configs/hybrid.yaml` updated to match. `TASK.md`'s own contents are left verbatim — it is
+  the original brief, an input to the project rather than documentation the project
+  maintains. A test asserts no document references the old top-level paths.
+- Removed `setup.sh`: it duplicated `make setup` and its only distinctive content was an
+  instruction for pasting into a hosted-environment setup field, which is noise in a public
+  repository.
+- Dead code removed rather than documented: `agent_config`, `AgentOccupancy.blocked_cells`,
+  `CarCollisionChecker.first_collision`, `DistanceField.occupied_mask`, `generate_batch`,
+  `scenario_generators`, `path_cells`, `summary_line` and `Agent.positions` had no callers.
+  The `CellType` re-export in `viz/render.py` was also dropped.
+- No planner code, config default or recorded result was changed in this pass. The battery
+  CSVs were regenerated from the code so the report and README agree, and the test suite is
+  unchanged apart from the new documentation checks.

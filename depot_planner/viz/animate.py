@@ -101,6 +101,7 @@ def animate_episode(
 
 
 def gif_size_mb(path: Path | str) -> float:
+    """Size of a written GIF in mebibytes."""
     return Path(path).stat().st_size / (1024 * 1024)
 
 

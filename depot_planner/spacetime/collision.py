@@ -7,7 +7,7 @@ uses the true footprints and shares no code with this module.
 
 from __future__ import annotations
 
-from typing import Iterable, Sequence
+from typing import Sequence
 
 from depot_planner.world.agents import Agent
 
@@ -50,6 +50,3 @@ class AgentOccupancy:
             if target in agent.cells_at(t) and source in agent.cells_at(t + 1):
                 return True
         return False
-
-    def blocked_cells(self, t: int) -> Iterable[Cell]:
-        return self.margin(t)

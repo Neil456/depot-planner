@@ -48,6 +48,7 @@ class CarModel:
 
     @classmethod
     def from_config(cls, config: dict[str, Any] | None = None) -> "CarModel":
+        """Build the car described by ``configs/hybrid.yaml``."""
         cfg = (config if config is not None else load_config("hybrid"))["car"]
         return cls(
             wheelbase=float(cfg["wheelbase"]),
@@ -62,14 +63,17 @@ class CarModel:
 
     @property
     def front_overhang(self) -> float:
+        """Distance from the rear axle to the front bumper."""
         return self.length - self.rear_overhang
 
     @property
     def min_turning_radius(self) -> float:
+        """Turning radius at full steering lock."""
         return self.wheelbase / math.tan(self.max_steer)
 
     @property
     def max_curvature(self) -> float:
+        """Reciprocal of the minimum turning radius."""
         return 1.0 / self.min_turning_radius
 
     @property
@@ -129,4 +133,5 @@ class CarModel:
         return poses
 
     def steer_angles(self, fractions: Iterable[float]) -> tuple[float, ...]:
+        """Steering angles for the given fractions of full lock."""
         return tuple(float(f) * self.max_steer for f in fractions)

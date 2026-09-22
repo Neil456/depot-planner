@@ -32,6 +32,7 @@ class CarCollisionReport:
     obstacle: Rectangle | None = None
 
     def describe(self) -> str:
+        """One-line summary for logs and the report."""
         if self.ok:
             return "no collision"
         x, y, theta = self.pose

@@ -21,7 +21,7 @@ import heapq
 import math
 import time
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable
 
 import numpy as np
 
@@ -311,7 +311,3 @@ def dijkstra_field(
                 dist[ny, nx] = nd
                 heapq.heappush(heap, (nd, nx, ny))
     return dist
-
-
-def path_cells(path: Sequence[Cell] | None) -> list[Cell]:
-    return list(path) if path else []
