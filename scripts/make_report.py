@@ -110,37 +110,62 @@ def grid_table(frame: pd.DataFrame) -> str:
 
 
 def cpp_section(frame: pd.DataFrame | None) -> list[str]:
-    """The step-7 table, or a note that the extension was not built."""
+    """The Python-vs-C++ table, or a note that the core was not benchmarked."""
     if frame is None or frame.empty:
         return [
-            "## 7. Python vs C++ (step 7)",
+            "## 7. Python vs C++",
             "",
-            "The optional C++ core was not built in this run, so there is nothing to time. "
+            "The C++ core was not benchmarked in this run. "
             "Build it with `pip install -e .` and rerun `make report`.",
             "",
         ]
     summary = summarise_cpp(frame)
+    repeats = int(summary["repeats"].max())
     table = report_helpers.markdown_table(summary, [
-        ("algorithm", "algorithm", ""),
-        ("pairs", "pairs", ".0f"),
-        ("mean_python_ms", "mean Python ms", ".4f"),
-        ("mean_cpp_ms", "mean C++ ms", ".4f"),
-        ("mean_speedup", "mean speedup", ".1f"),
-        ("max_cost_difference", "worst cost difference", ".2e"),
-        ("identical_paths", "identical paths", ""),
+        ("planner", "planner", ""),
+        ("cases", "cases", ".0f"),
+        ("median_python_ms", "median Python ms", ".4f"),
+        ("median_cpp_ms", "median C++ ms", ".4f"),
+        ("median_speedup", "median speedup", ".1f"),
+        ("median_nodes", "median nodes expanded", ".0f"),
+        ("identical", "identical plans", ""),
     ])
+    per_case = report_helpers.markdown_table(
+        frame.sort_values("speedup").groupby("planner", sort=False).agg(
+            slowest_case=("case", "first"),
+            slowest_speedup=("speedup", "min"),
+            fastest_speedup=("speedup", "max"),
+        ).reset_index(),
+        [
+            ("planner", "planner", ""),
+            ("slowest_speedup", "smallest speedup", ".1f"),
+            ("fastest_speedup", "largest speedup", ".1f"),
+            ("slowest_case", "case with the smallest speedup", ""),
+        ],
+    )
     return [
-        "## 7. Python vs C++ (step 7)",
+        "## 7. Python vs C++",
         "",
-        "The C++ core under `cpp/` is a C++17 port of the step-1 search with the same neighbourhood, "
-        "cost rule, heuristic and tie-breaking. Best of three runs per problem, same start/goal "
-        "pairs as section 1.",
+        f"Every planner, timed on both backends over the same prepared inputs. Each case is "
+        f"run {repeats} times per backend and the **median** is kept; a mean is dragged around "
+        f"by scheduling noise and a minimum flatters whichever backend gets luckier. Scenario "
+        f"setup — cost maps, drivable masks, cost-to-go fields, agent timelines, distance "
+        f"fields — happens before the clock starts, so what is timed is the search alone.",
         "",
         table,
         "",
-        "The two backends return the same path on every pair, not merely the same cost.",
+        "`identical plans` is the point of the column: every case returns the same path, the "
+        "same cost and the same expansion count on both backends, so the speed-up is not "
+        "bought by searching differently. The spread per planner:",
+        "",
+        per_case,
+        "",
+        "`make cpp-bench` runs the same three searches through Google Benchmark on fixed "
+        "scenarios built in C++ (`cpp/bench/`), which measures the core without the binding "
+        "layer or the interpreter.",
         "",
     ]
+
 
 
 def hard_backend_section(frames: dict[str, pd.DataFrame]) -> list[str]:

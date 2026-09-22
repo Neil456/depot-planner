@@ -84,36 +84,42 @@ inline GridScenario MakeDepotGrid() {
   return scenario;
 }
 
-/// The depot grid plus eight 2x2 vehicles crawling along the aisles, each on a
-/// fixed timeline. Two of them cross the ego's route head on.
+/// The depot grid plus six 2x2 vehicles, two per aisle, driving towards each
+/// other along the lane and then pulling into the parking band beside it.
+///
+/// Each vehicle plus its one-cell margin fills the four-cell aisle completely
+/// while it is in the lane, so the ego has to time its run; once they park, the
+/// lane clears and the goal stays reachable. That is the same shape of problem
+/// the `congested` scenario generator produces.
 inline AgentOccupancy MakeTraffic() {
-  std::vector<AgentTimeline> agents;
+  constexpr int kHorizon = 400;
   const int aisle_rows[3] = {6, 18, 30};
-  for (int lane = 0; lane < 3; ++lane) {
-    for (int index = 0; index < 2; ++index) {
-      AgentTimeline agent;
-      agent.width = 2;
-      agent.height = 2;
-      const int y = aisle_rows[lane] + 1;
-      const int direction = index == 0 ? 1 : -1;
-      int x = index == 0 ? 6 + 9 * lane : 50 - 7 * lane;
-      for (int t = 0; t <= 400; ++t) {
-        agent.anchors.push_back(Cell{x, y});
-        // Crawl along the lane, pausing every fifth step, and turn at the ends.
-        if (t % 5 != 4) x += direction;
-        if (x < 2) x = 2;
-        if (x > 56) x = 56;
-      }
-      agents.push_back(std::move(agent));
-    }
-  }
-  // Two more sitting in the connectors, so the ego has to plan around them.
-  for (int connector : {14, 42}) {
+  std::vector<AgentTimeline> agents;
+
+  const auto drive = [&agents](int lane_y, int park_y, int from_x, int to_x, int start_delay) {
     AgentTimeline agent;
     agent.width = 2;
     agent.height = 2;
-    for (int t = 0; t <= 400; ++t) agent.anchors.push_back(Cell{connector, 20 + (t / 40) % 6});
+    const int direction = to_x >= from_x ? 1 : -1;
+    int x = from_x;
+    int y = lane_y;
+    for (int t = 0; t <= kHorizon; ++t) {
+      agent.anchors.push_back(Cell{x, y});
+      if (t < start_delay) continue;
+      if (x != to_x) {
+        x += direction;  // one cell per step along the lane
+      } else if (y != park_y) {
+        ++y;  // then pull into the parking band and stop
+      }
+    }
     agents.push_back(std::move(agent));
+  };
+
+  for (int lane = 0; lane < 3; ++lane) {
+    const int lane_y = aisle_rows[lane] + 1;
+    const int park_y = aisle_rows[lane] + 4;
+    drive(lane_y, park_y, 6 + 4 * lane, 30 + 4 * lane, 2 * lane);
+    drive(lane_y, park_y, 52 - 3 * lane, 36 + 4 * lane, 5 + 2 * lane);
   }
   return AgentOccupancy(std::move(agents), 1);
 }
@@ -128,9 +134,7 @@ struct ParkingScenario {
   Pose start;
   Pose goal;
 
-  DistanceFieldView view() const {
-    return DistanceFieldView(CostMapView(distance), resolution);
-  }
+  DistanceFieldView view() const { return DistanceFieldView(CostMapView(distance), resolution); }
 };
 
 /// Rasterise rectangles and build the same conservative distance field the
@@ -187,8 +191,8 @@ inline ParkingScenario MakeParallelParking() {
                                       {width - wall, 0.0, width, height}};
   obstacles.insert(obstacles.end(), near.begin(), near.end());
   for (double x = wall + spacing; x + car_length + wall < width; x += car_length + spacing) {
-    obstacles.push_back({x, far_centre - car_width / 2.0, x + car_length,
-                         far_centre + car_width / 2.0});
+    obstacles.push_back(
+        {x, far_centre - car_width / 2.0, x + car_length, far_centre + car_width / 2.0});
   }
 
   ParkingScenario scenario;

@@ -181,18 +181,24 @@ rendering the wrong frame. Found only when the images were first looked at.
 
 ## C++ core
 
-The planning core lives under `cpp/` as a C++17 library (`depot_core`) exposed
-through pybind11, with the same neighbourhood, cost rule, heuristic and
-tie-breaking as the Python reference. `pip install -e .` builds it through
-scikit-build-core. Best of three runs per problem, on the same 100 start/goal
-pairs as the grid table in Results.
+All three planners are a C++17 library under `cpp/` (`depot_core`), exposed
+through pybind11 and built by `pip install -e .` via scikit-build-core. Python
+keeps what it is good at: scenario generation, the closed-loop orchestration,
+the two independent collision checkers, plotting and reports. The pure-Python
+planners stay in the tree as the **reference implementation** and still run on
+`--backend python`; every C++ plan is verified against them.
+
+Each case below is run five times per backend and the median kept, on the same
+prepared inputs with scenario setup excluded from the clock.
 
 <!-- BEGIN GENERATED: cpp_table -->
-| algorithm | Python ms | C++ ms | speedup | identical paths |
-| :-- | :-- | :-- | :-- | :-- |
-| Dijkstra | 8.6841 | 0.2848 | 30.5 | yes |
-| A* | 2.4274 | 0.1026 | 21.9 | yes |
-| Weighted A* (w=1.5) | 0.7645 | 0.0549 | 12.9 | yes |
+| planner | cases | Python ms | C++ ms | speedup | identical plans |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| grid A* (Dijkstra) | 40 | 9.0459 | 0.2947 | 30.4 | yes |
+| grid A* | 40 | 1.7967 | 0.0864 | 22.5 | yes |
+| grid A* (weighted, w=1.5) | 40 | 0.5276 | 0.0480 | 11.6 | yes |
+| space-time A* | 10 | 35.5036 | 0.8480 | 41.0 | yes |
+| hybrid A* | 8 | 212.9811 | 8.1482 | 25.0 | yes |
 <!-- END GENERATED: cpp_table -->
 
 ## Quickstart

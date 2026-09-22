@@ -94,7 +94,17 @@ orchestration, the independent collision checkers, plotting and reports.
       50 ms budget, space-time A* went from 66.7%/53.3% on the reference to 100%/100% on the
       core, because the search now fits in the budget. Both backends are reported side by
       side in REPORT.md section 2 and README.md.
-- [ ] C++ step 6: Google Benchmark suite, Python-vs-C++ table, sanitizer CI
+- [x] **C++ step 6: benchmarks and correctness tooling** — done. `cpp/bench/` is a Google
+      Benchmark suite over grid A*, the Dijkstra field, space-time A* (both heuristics), the
+      snapshot baseline, hybrid A* (with and without the analytic expansion) and the distance
+      transform, all on fixed scenarios built in C++. `scripts/bench_cpp.py` times the same
+      planners through the bindings against the Python reference, five runs per case with the
+      median kept and scenario setup excluded; the table is in REPORT.md section 7 and in the
+      README. Median speed-ups: 12-30x on the grid searches, **41x** on space-time A*, 25x on
+      hybrid A*, with identical plans on every case. CI now has three jobs: the Python suite
+      (which asserts the core was actually built), a C++ job running `clang-format --Werror`,
+      ctest and a benchmark smoke run, and a third running the same 59 GoogleTest cases under
+      AddressSanitizer and UndefinedBehaviorSanitizer.
 - [ ] C++ step 7 (optional): closed-loop runner in C++
 - [ ] C++ step 8: README architecture and build documentation
 

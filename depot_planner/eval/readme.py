@@ -74,11 +74,12 @@ def _parking_table(frame: pd.DataFrame) -> str:
 
 def _cpp_table(frame: pd.DataFrame) -> str:
     return helpers.markdown_table(summarise_cpp(frame), [
-        ("algorithm", "algorithm", ""),
-        ("mean_python_ms", "Python ms", ".4f"),
-        ("mean_cpp_ms", "C++ ms", ".4f"),
-        ("mean_speedup", "speedup", ".1f"),
-        ("identical_paths", "identical paths", ""),
+        ("planner", "planner", ""),
+        ("cases", "cases", ".0f"),
+        ("median_python_ms", "Python ms", ".4f"),
+        ("median_cpp_ms", "C++ ms", ".4f"),
+        ("median_speedup", "speedup", ".1f"),
+        ("identical", "identical plans", ""),
     ])
 
 

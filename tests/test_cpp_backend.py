@@ -213,11 +213,24 @@ def test_asking_for_the_core_with_expanded_cells_is_an_error(problems):
 
 @needs_cpp
 def test_the_benchmark_shows_agreement_and_reports_a_speedup():
-    frame = compare_backends(pairs=8, repeats=1)
-    assert len(frame) == 8 * 3
-    assert (frame["cost_difference"] < 1e-9).all()
-    assert frame["same_path"].all()
+    """The grid slice of the Python-vs-C++ benchmark, kept small for the suite."""
+    frame = compare_backends(pairs=6, repeats=1, planners=["grid"])
+    assert len(frame) == 6 * 3
+    assert frame["agree"].all()
     summary = summarise_cpp(frame)
     assert len(summary) == 3
-    assert (summary["identical_paths"]).all()
-    assert (summary["mean_speedup"] > 1.0).all()
+    assert summary["identical"].all()
+    assert (summary["median_speedup"] > 1.0).all()
+
+
+@needs_cpp
+def test_the_benchmark_covers_every_planner():
+    frame = compare_backends(pairs=2, repeats=1, scenarios=1)
+    assert set(frame["planner"]) == {
+        "grid A* (Dijkstra)", "grid A*", "grid A* (weighted, w=1.5)",
+        "space-time A*", "hybrid A*",
+    }
+    assert frame["agree"].all()
+    # Setup is excluded from the timing, so nothing should read as free.
+    assert (frame["cpp_ms"] > 0.0).all()
+    assert (frame["python_ms"] > 0.0).all()

@@ -5,8 +5,9 @@ on:
 
 jobs:
   pytest:
+    name: Python suite (builds the C++ core)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -23,5 +24,58 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      - name: Check the C++ core was actually built
+        run: python -c "from depot_planner import core; assert core.available(), 'the C++ core is missing'"
+
       - name: Run the test suite
         run: python -m pytest -q
+
+  cpp:
+    name: C++ core (GoogleTest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build clang-format
+
+      - name: Check the formatting
+        run: make format-check
+
+      - name: Build and run ctest
+        run: make cpp-test
+
+      - name: Build the benchmark binary
+        run: cmake --build build/cpp --target depot_bench --parallel
+
+      - name: Smoke-run the benchmarks
+        run: ./build/cpp/bench/depot_bench --benchmark_min_time=0.01s
+
+  sanitizers:
+    name: C++ core under ASan and UBSan
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      # A sanitized build of the same GoogleTest suite. Every planner in the
+      # core is exercised, so this covers the search loops, the hash table, the
+      # distance transform and the Reeds-Shepp words.
+      - name: Build with AddressSanitizer and UndefinedBehaviorSanitizer
+        run: |
+          make cpp-build \
+            CPP_BUILD_DIR=build/cpp-sanitize \
+            CPP_BUILD_TYPE=RelWithDebInfo \
+            CMAKE_EXTRA="-DDEPOT_SANITIZE=ON"
+
+      - name: Run ctest under the sanitizers
+        env:
+          ASAN_OPTIONS: detect_leaks=1:detect_stack_use_after_return=1:abort_on_error=0
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build/cpp-sanitize --output-on-failure

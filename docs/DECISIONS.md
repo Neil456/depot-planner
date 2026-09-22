@@ -444,3 +444,36 @@ One line per decision: what was chosen and why.
   space-time timeouts that no longer happen were deleted rather than left in the repository.
 - The GIFs were regenerated and came out byte-identical, which is the expected result: they
   show normal-tier episodes, and those are unchanged by the backend.
+
+## C++ step 6 — benchmarks and correctness tooling
+
+- **Median, not mean or minimum.** Each case runs five times per backend. A mean is dragged
+  around by the occasional scheduling hiccup on a shared machine, and a minimum flatters
+  whichever backend happens to get the luckiest run; the median is the honest middle. The
+  earlier step-7 benchmark used best-of-three, and it has been replaced rather than kept
+  alongside, so the report has one timing table rather than two that disagree.
+- **Setup is outside the clock.** Cost maps, drivable masks, cost-to-go fields, agent
+  timelines and distance fields are built once per case and handed to both backends. What is
+  timed is the search. Without that, the hybrid A* rows would mostly be measuring the same
+  numpy distance-transform call twice.
+- Every timed case also asserts the two backends returned the same plan, so the `identical
+  plans` column in the table is produced by the benchmark rather than promised by prose. A
+  speed-up bought by searching differently would show up here.
+- **Two benchmark suites, deliberately.** `make cpp-bench` (Google Benchmark, scenarios built
+  in C++) measures the core with no interpreter and no binding layer;
+  `scripts/bench_cpp.py` measures what the project actually pays, bindings included. They
+  answer different questions and the report says which is which.
+- The benchmark's own traffic scenario was wrong on its first run: agents parked in both
+  vertical connectors left the goal unreachable, so space-time A* exhausted a 400-step
+  horizon and "benchmarked" 717k expansions of a hopeless search. The agents now pull into
+  the parking band beside their lane once they have driven it, which is what the Python
+  generator's traffic does. The giveaway was the grid and octile heuristics reporting the
+  same expansion count.
+- **The sanitizer job runs the GoogleTest suite, not a separate harness.** Those 59 cases
+  already exercise every search loop, the open-addressing state table, the distance
+  transform and every Reeds-Shepp word, so a sanitized build of them covers the core. Leak
+  detection and stack-use-after-return are both on.
+- CI grew from one job to three: the Python suite (which now asserts the core was actually
+  built rather than silently testing the fallback), a C++ job that also runs
+  `clang-format --Werror` and a benchmark smoke run, and the sanitizer job. The C++ jobs
+  fetch GoogleTest and Google Benchmark at configure time; the Python job never does.
