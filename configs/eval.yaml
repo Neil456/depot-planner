@@ -22,3 +22,14 @@ parking_animation:
   dpi: 90
   figure_size: [7.0, 5.0]
   max_frames: 160
+
+# Hard tier (added after step 5). Separate seeds, harder scenarios and a budget
+# on the planner. Chosen before the tier was ever run and not revised since.
+hard_battery:
+  episodes_per_type: 30
+  seed_offset: 5000
+  scenario_types: [congested_hard, head_on_narrow]
+  parking_types: [parallel_minimal, perpendicular_minimal]
+  planners: [spacetime_astar, baseline_replan]
+  planning_time_limit_ms: 50    # one fifth of the 250 ms simulation step
+  parking_max_expansions: 5000  # roughly the normal tier's mean for `parallel`

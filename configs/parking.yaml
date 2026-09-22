@@ -27,3 +27,17 @@ tight:                     # overrides applied to whichever base layout is chose
 start:
   offset: [6.0, 13.0]      # distance along the aisle from the target
   max_attempts: 60
+
+# Hard tier (added after step 5). Gaps are placed a fixed distance above the
+# *minimum the collision model admits*, which is computed from the car geometry
+# in world/parking.py rather than written down here. The normal tier above is
+# untouched.
+hard:
+  parallel_minimal:
+    base: parallel
+    apply_tight_overrides: true
+    gap_above_minimum: [0.3, 0.6]
+  perpendicular_minimal:
+    base: perpendicular_reverse
+    apply_tight_overrides: true
+    spot_width_above_minimum: [0.3, 0.6]
