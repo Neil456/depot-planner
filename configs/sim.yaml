@@ -1,0 +1,4 @@
+# Closed-loop execution (step 4).
+replan_every: 4            # default planner cadence, in simulation steps
+hold_on_plan_failure: true # no plan -> stay put this step and try again next step
+record_plans: true         # keep each replan's plan for the animations

@@ -1,0 +1,34 @@
+PYTHON ?= python3
+
+.PHONY: setup test step1 battery gifs report all clean
+
+setup:
+	pip install -e ".[dev]"
+
+test:
+	$(PYTHON) -m pytest -q
+
+step1:
+	$(PYTHON) scripts/demo_grid.py
+
+battery:
+	$(PYTHON) scripts/run_battery.py
+	$(PYTHON) scripts/run_parking_battery.py
+
+gifs:
+	$(PYTHON) scripts/demo_scenarios.py
+	$(PYTHON) scripts/demo_parking.py
+	$(PYTHON) scripts/make_gifs.py
+	$(PYTHON) scripts/make_parking_gifs.py
+	$(PYTHON) scripts/make_showcase.py
+
+report:
+	$(PYTHON) scripts/bench_cpp.py
+	$(PYTHON) scripts/make_report.py
+	$(PYTHON) scripts/make_readme.py
+
+all: setup test step1 battery gifs report
+
+clean:
+	rm -rf results/step1 results/step2 results/step5 results/gifs results/*.csv
+	rm -rf results/README_assets/report

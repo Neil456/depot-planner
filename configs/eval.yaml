@@ -1,0 +1,43 @@
+# Scenario battery and report generation (steps 4 and 6).
+battery:
+  episodes_per_type: 30
+  seed_offset: 1000        # battery seeds are offset from the demo/test seeds
+  planners: [spacetime_astar, baseline_replan]
+
+grid_benchmark:
+  pairs: 100               # start/goal pairs for the step-1 table
+  map_seed: 0
+  sample_seed: 4242
+  min_separation: 20.0
+
+animation:
+  fps: 8
+  step_stride: 1           # draw every Nth simulation step
+  max_frames: 140
+  dpi: 70
+  figure_size: [6.4, 4.4]
+
+showcase:                  # the polished README animations
+  fps: 12                  # smooth playback without inflating the file
+  width_px: 800            # hero GIF width
+  side_by_side_width_px: 1000
+  dpi: 100
+  max_frames: 120
+  hold_frames: 14          # frames the last frame is held, so the outcome reads
+
+parking_animation:
+  fps: 10
+  dpi: 90
+  figure_size: [7.0, 5.0]
+  max_frames: 160
+
+# Hard tier (added after step 5). Separate seeds, harder scenarios and a budget
+# on the planner. Chosen before the tier was ever run and not revised since.
+hard_battery:
+  episodes_per_type: 30
+  seed_offset: 5000
+  scenario_types: [congested_hard, head_on_narrow]
+  parking_types: [parallel_minimal, perpendicular_minimal]
+  planners: [spacetime_astar, baseline_replan]
+  planning_time_limit_ms: 50    # one fifth of the 250 ms simulation step
+  parking_max_expansions: 5000  # roughly the normal tier's mean for `parallel`

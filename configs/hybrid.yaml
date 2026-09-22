@@ -1,0 +1,46 @@
+# Hybrid A* parking planner (step 5).
+car:
+  wheelbase: 2.7           # m
+  length: 4.5              # m
+  width: 1.9               # m
+  max_steer: 0.6           # rad
+  rear_overhang: 0.9       # m from the rear axle to the rear bumper
+  n_discs: 4               # discs covering the footprint for collision checking
+
+discretisation:
+  xy_resolution: 0.5       # m, for duplicate detection
+  heading_bins: 72         # 5 degrees each
+
+primitives:
+  arc_length: 1.0          # m per motion primitive
+  steer_fractions: [-1.0, -0.5, 0.0, 0.5, 1.0]   # multiples of max_steer
+  substeps: 5              # collision checks per arc
+  directions: [1, -1]      # forward and reverse
+
+costs:
+  reverse_multiplier: 2.0  # reverse arcs cost this much more
+  direction_change: 5.0    # penalty for switching between forward and reverse
+  steer_penalty: 0.5       # x |steer| per primitive
+  steer_change_penalty: 0.3  # x |steer - previous steer| per primitive
+
+heuristic:
+  grid_resolution: 1.0     # m, for the obstacle-aware Dijkstra field
+  octile_correction: true  # scale the 8-connected field by cos(pi/8), see docs/DECISIONS.md
+
+collision:
+  field_resolution: 0.05   # m, resolution of the obstacle distance field
+  safety_margin: 0.0       # m added to every disc radius
+
+goal:
+  position_tolerance: 0.3  # m
+  heading_tolerance_deg: 5.0
+
+limits:
+  max_expansions: 30000
+  time_limit_s: 20.0
+
+analytic:
+  enabled: true            # Reeds-Shepp shot at the goal
+  every: 8                 # attempted every N expansions
+  max_distance: 30.0       # only attempted when the goal is within this range
+  interpolation_step: 0.2  # m between collision checks along the analytic path

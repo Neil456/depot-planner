@@ -1,0 +1,17 @@
+# Space-time A* over (x, y, t) and the replanning baseline (step 3).
+spacetime:
+  time_cost: 0.05          # cost charged per simulation step, so waiting is not free
+  inflate: 1               # cells of safety margin around an agent body
+  relax_margin_when_inside: true   # if the ego already sits in the margin it may move
+                                   # within it, but never into an agent body
+  heuristic: grid_dijkstra # 'grid_dijkstra' (exact step-1 cost-to-go, precomputed once
+                           # per scenario) or 'octile' (step-1 octile x min cell cost)
+  heuristic_includes_time: true    # add chebyshev(steps) * time_cost; still admissible
+  max_time_horizon: 700    # hard cap on t
+  max_nodes: 120000        # hard cap on expansions; bounds the cost of a hopeless replan
+  time_limit_ms: null      # optional wall-clock budget per replan; null = unlimited
+
+baseline:
+  inflate: 1               # same safety margin, but agents are frozen where they are now
+  hold_on_failure: true    # when no path exists the baseline waits one step and retries
+  time_limit_ms: null      # optional wall-clock budget per replan; null = unlimited
