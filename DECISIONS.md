@@ -46,3 +46,37 @@ One line per decision: what was chosen and why.
   stronger than checking the empty map: it rules out a blocker that parks in the only gap.
 - A failed generation raises `ScenarioGenerationError` after a bounded attempt budget
   rather than looping forever.
+
+## Step 3 — space-time A*
+
+- Default heuristic is `grid_dijkstra`: the exact step-1 cost-to-go to the goal on the
+  static map, computed once per scenario with the step-1 Dijkstra code and reused across
+  replans. It is admissible (agents can only add cost or waiting) and consistent (it is an
+  exact distance under the same cost model), and it dominates the plain octile heuristic:
+  over 15 scenarios it gave **identical optimal costs** with 15k expansions instead of
+  176k, and 0.4 s instead of 5.2 s. Plain `octile` stays selectable and a test asserts the
+  two agree on cost. Step 5 uses the same obstacle-aware field, so this keeps the project
+  consistent rather than introducing a second idea.
+- Heuristic adds `chebyshev(cell, goal) * time_cost`: any path needs at least that many
+  steps, so the time term stays admissible too.
+- A wait costs `time_cost` and nothing else (it moves nowhere); a move costs the step-1
+  movement cost plus `time_cost`. The result reports `cost`, `movement_cost` and
+  `wait_steps` separately.
+- The spec's "with no agents its cost equals step-1 A*" is tested with `time_cost = 0`,
+  because a non-zero per-step time cost is by construction a different objective. With the
+  default `time_cost = 0.05` the test instead asserts no waiting and a movement cost that
+  is never below and at most 2% above the step-1 optimum.
+- Safety margin: the ego may not enter an agent footprint inflated by 1 cell. If the ego
+  already stands inside that margin (the closed loop can produce this — the margin is a
+  comfort buffer, not a collision) the margin is relaxed for one move so the ego can get
+  out, but an agent *body* is never enterable. Without this the runner can dead-end on a
+  state that is not actually a collision.
+- The baseline replans every step (`replan_every = 1`) as the spec describes, while
+  space-time A* uses the runner's default cadence of 4. That gives the baseline the more
+  reactive schedule, so the comparison is conservative in its favour.
+- When the baseline's A* finds nothing (an agent is sitting on the only corridor) it holds
+  position for one step instead of failing the episode. A baseline that gives up the moment
+  traffic appears would not be a fair comparison.
+- `sim/collision.py` (the independent checker) was written during step 3 rather than step 4,
+  because step 3's own check requires it. It shares no code with the planners and uses the
+  true footprints, with no safety margin.
