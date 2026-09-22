@@ -26,6 +26,7 @@ from typing import Any, Iterable, Sequence
 import numpy as np
 
 from depot_planner.config import load_config
+from depot_planner.grid_astar import backend as _backend
 
 Cell = tuple[int, int]
 
@@ -108,13 +109,41 @@ def search(
     weight: float = 1.0,
     min_cell_cost: float | None = None,
     max_nodes: int | None = None,
+    time_limit_ms: float | None = None,
     collect_expanded: bool = True,
     config: dict[str, Any] | None = None,
+    backend: str = "auto",
 ) -> SearchResult:
-    """Best-first search from ``start`` to ``goal`` over an 8-connected grid."""
+    """Best-first search from ``start`` to ``goal`` over an 8-connected grid.
+
+    ``time_limit_ms`` is an optional wall-clock budget; on expiry the search
+    returns a clean "no path" result rather than a partial one.
+
+    ``backend`` selects the implementation: ``"python"`` for this module,
+    ``"cpp"`` for the compiled core (an error if it was not built), or
+    ``"auto"`` (the default) for the core when it is available and the call
+    does not need the expanded-cell set, falling back to Python otherwise. The
+    two produce identical paths and costs; see ``tests/test_cpp_backend.py``.
+    """
     cfg = config if config is not None else load_config("grid")
     if max_nodes is None:
         max_nodes = int(cfg["search"]["max_nodes"])
+
+    if backend not in ("auto", "python", "cpp"):
+        raise ValueError(f"unknown backend {backend!r}; expected auto, python or cpp")
+    if backend != "python":
+        usable = _backend.can_use_cpp(heuristic, collect_expanded, cost_map, min_cell_cost)
+        if backend == "cpp":
+            if not _backend.extension_available():
+                raise RuntimeError("the C++ core is not built; reinstall with `pip install -e .`")
+            if collect_expanded:
+                raise ValueError("the C++ core does not report expanded cells")
+            if not usable:
+                raise ValueError("this call cannot be served by the C++ core")
+        if usable:
+            return _search_cpp(
+                cost_map, start, goal, drivable, heuristic, weight, max_nodes, time_limit_ms
+            )
 
     cost, mask = _validated(cost_map, drivable)
     height, width = cost.shape
@@ -164,6 +193,10 @@ def search(
             return SearchResult(
                 False, None, math.inf, nodes_expanded, elapsed_ms(), expanded, "node limit reached"
             )
+        if time_limit_ms is not None and elapsed_ms() > time_limit_ms:
+            return SearchResult(
+                False, None, math.inf, nodes_expanded, elapsed_ms(), expanded, "time limit reached"
+            )
 
         cx, cy = current
         current_cost = cost[cy, cx]
@@ -186,6 +219,25 @@ def search(
                 heapq.heappush(heap, (tentative + h_of(neighbour), tentative, counter, neighbour))
 
     return SearchResult(False, None, math.inf, nodes_expanded, elapsed_ms(), expanded, "goal unreachable")
+
+
+def _search_cpp(
+    cost_map: np.ndarray,
+    start: Cell,
+    goal: Cell,
+    drivable: np.ndarray | None,
+    heuristic: str,
+    weight: float,
+    max_nodes: int,
+    time_limit_ms: float | None,
+) -> SearchResult:
+    """Run the compiled core and wrap its answer as a :class:`SearchResult`."""
+    effective = _backend.effective_cost_map(cost_map, drivable)
+    cpp_weight = _backend.heuristic_weight(heuristic, weight)
+    success, path, cost, nodes, runtime_ms, reason = _backend.solve(
+        effective, start, goal, cpp_weight, max_nodes, time_limit_ms
+    )
+    return SearchResult(success, path, cost, nodes, runtime_ms, set(), reason)
 
 
 def _reconstruct(parent: dict[Cell, Cell], start: Cell, goal: Cell) -> list[Cell]:

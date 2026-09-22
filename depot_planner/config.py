@@ -42,3 +42,18 @@ def results_path(*parts: str) -> Path:
     path = RESULTS_DIR.joinpath(*parts)
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def deep_merge(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge ``overrides`` into a copy of ``base``.
+
+    Used to apply a difficulty tier's overrides on top of a baseline config
+    without mutating either, so the normal tier is never disturbed.
+    """
+    merged = copy.deepcopy(base)
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = copy.deepcopy(value)
+    return merged
