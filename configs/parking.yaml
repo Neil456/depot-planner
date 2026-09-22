@@ -1,0 +1,29 @@
+# Seeded parking scenarios (step 5). All lengths in metres.
+world:
+  wall_thickness: 0.5
+
+perpendicular:
+  spot_count: [7, 9]
+  spot_width: 2.7
+  spot_depth: 6.0
+  aisle_width: 7.0
+  nose_clearance: 0.8      # gap between a parked car and the back of its spot
+  fill_probability: 0.85   # chance a non-target spot holds a parked car
+
+parallel:
+  bay_count: [4, 6]
+  lane_depth: 2.8
+  car_spacing: 1.0         # gap between consecutive parked cars in a lane
+  gap: [6.5, 8.0]          # length of the target gap
+  aisle_width: 7.0
+
+tight:                     # overrides applied to whichever base layout is chosen
+  spot_width: 2.3
+  aisle_width: 6.0
+  gap: [6.0, 6.4]
+  lane_depth: 2.5
+  fill_probability: 1.0
+
+start:
+  offset: [6.0, 13.0]      # distance along the aisle from the target
+  max_attempts: 60

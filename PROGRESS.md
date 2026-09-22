@@ -19,7 +19,11 @@ Read this first. Status of each step from `TASK.md`.
       `results/battery_spacetime.csv`; 10 GIFs in `results/gifs/`, largest 0.15 MB.
       Space-time A*: 100% success, 0 collisions. Baseline: 5 collisions on `crossing`,
       2 on `congested`. 79 tests green.
-- [ ] Step 5: Hybrid A* parking
+- [x] **Step 5: Hybrid A* parking** — done. Kinematic bicycle car, disc/distance-field
+      collision checking, Reeds-Shepp analytic expansion, four seeded parking scenario
+      types. Battery of 120 scenarios in 57 s -> `results/battery_parking.csv`:
+      100% success on all four types, every plan verified by an independent exact
+      rectangle checker. GIFs in `results/gifs/parking/`. 120 tests green.
 - [ ] Step 6: Report and README
 - [ ] Step 7 (optional): C++ core for grid A*
 

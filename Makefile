@@ -16,6 +16,8 @@ battery:
 	$(PYTHON) scripts/run_parking_battery.py
 
 gifs:
+	$(PYTHON) scripts/demo_scenarios.py
+	$(PYTHON) scripts/demo_parking.py
 	$(PYTHON) scripts/make_gifs.py
 	$(PYTHON) scripts/make_parking_gifs.py
 
@@ -25,4 +27,4 @@ report:
 all: setup test step1 battery gifs report
 
 clean:
-	rm -rf results/step1 results/gifs results/failures results/*.csv
+	rm -rf results/step1 results/step2 results/step5 results/gifs results/failures results/*.csv
