@@ -5,7 +5,10 @@ Read this first. Status of each step from `TASK.md`.
 - [x] **Step 1: Grid A* with driving cost map** — done. Occupancy grid + EDT proximity
       penalty, one generic best-first search (Dijkstra / A* / weighted A*), deterministic
       depot generator, renderer; `results/step1/compare.png` written. 15 tests green.
-- [ ] Step 2: Scenarios with moving vehicles
+- [x] **Step 2: Scenarios with moving vehicles** — done. 2x2 agents on precomputed aisle
+      timelines; `empty`, `crossing`, `head_on`, `blocked_then_clears`, `congested`, all
+      seed-reproducible and verified solvable once agents rest;
+      `results/step2/*.png` written. 37 tests green.
 - [ ] Step 3: Space-time A*
 - [ ] Step 4: Closed-loop simulator and scenario battery
 - [ ] Step 5: Hybrid A* parking

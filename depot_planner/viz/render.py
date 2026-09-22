@@ -23,7 +23,7 @@ MAP_COLORS = ("#e9edf2", "#cfd8e3", "#4a5568")
 MAP_CMAP = ListedColormap(MAP_COLORS)
 
 EGO_COLOR = "#1b6ac9"
-AGENT_COLORS = ("#e07a5f", "#8e44ad", "#c0392b", "#16a085", "#d68910", "#2c3e50")
+AGENT_COLORS = ("#e07a5f", "#8e44ad", "#c0392b", "#16a085", "#d68910", "#0e7c9b")
 
 
 def draw_map(ax, grid: Grid) -> None:
@@ -154,8 +154,67 @@ def save_map_png(grid: Grid, path: Path | str, title: str = "") -> Path:
     return out
 
 
+def draw_agents(ax, agents, t: int, alpha: float = 0.95) -> list:
+    """Draw agent footprints at step ``t`` as coloured rectangles."""
+    from matplotlib.patches import Rectangle
+
+    patches = []
+    for index, agent in enumerate(agents):
+        x, y = agent.anchor_at(t)
+        color = AGENT_COLORS[index % len(AGENT_COLORS)]
+        patch = Rectangle(
+            (x - 0.5, y - 0.5),
+            agent.footprint.width,
+            agent.footprint.height,
+            facecolor=color,
+            edgecolor="white",
+            linewidth=0.8,
+            alpha=alpha,
+            zorder=4,
+        )
+        ax.add_patch(patch)
+        patches.append(patch)
+    return patches
+
+
+def draw_ego(ax, cell, color: str = EGO_COLOR, size: float = 1.0):
+    """Draw the ego vehicle as a highlighted square."""
+    from matplotlib.patches import Rectangle
+
+    patch = Rectangle(
+        (cell[0] - size / 2.0, cell[1] - size / 2.0),
+        size,
+        size,
+        facecolor=color,
+        edgecolor="white",
+        linewidth=1.2,
+        zorder=6,
+    )
+    ax.add_patch(patch)
+    return patch
+
+
+def save_scenario_png(scenario, path, t: int = 0, title: str = ""):
+    """Snapshot of a scenario at step ``t``: map, agents, ego, goal."""
+    fig, ax = plt.subplots(figsize=(7.0, 5.0))
+    draw_map(ax, scenario.grid)
+    draw_path(ax, scenario.natural_route, color="#7f8c8d", linewidth=1.6, alpha=0.8)
+    draw_agents(ax, scenario.agents, t)
+    draw_endpoints(ax, scenario.start, scenario.goal)
+    ax.set_title(title or f"{scenario.name} (seed {scenario.seed}) at t={t}", fontsize=10)
+    fig.tight_layout()
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=130)
+    plt.close(fig)
+    return out
+
+
 __all__ = [
     "AGENT_COLORS",
+    "draw_agents",
+    "draw_ego",
+    "save_scenario_png",
     "EGO_COLOR",
     "CellType",
     "draw_endpoints",
