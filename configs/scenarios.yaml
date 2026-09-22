@@ -29,3 +29,27 @@ blocked_then_clears:
 
 congested:
   agent_count: [6, 10]
+
+# Hard tier (added after step 5). Each hard type names a base type and the
+# overrides applied on top of this file and configs/depot.yaml. The normal tier
+# above is untouched.
+hard:
+  congested_hard:
+    base: congested
+    scenarios:
+      congested:
+        agent_count: [12, 16]
+      scenario:
+        max_generation_attempts: 160
+  head_on_narrow:
+    base: head_on
+    depot:
+      aisles:
+        width: 3            # a 2-cell-wide vehicle plus its 1-cell margin fills it
+      cross_aisles:
+        width: 2
+    scenarios:
+      head_on:
+        min_segment_cells: 8
+      scenario:
+        max_generation_attempts: 160

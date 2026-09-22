@@ -19,7 +19,7 @@ from typing import Any, Callable, Sequence
 
 import numpy as np
 
-from depot_planner.config import load_config
+from depot_planner.config import deep_merge, load_config
 from depot_planner.grid_astar.search import astar
 from depot_planner.world.agents import (
     Agent,
@@ -43,6 +43,14 @@ SCENARIO_TYPES: tuple[str, ...] = (
     "congested",
 )
 
+#: Harder variants, defined in ``configs/scenarios.yaml`` under ``hard:``.
+HARD_SCENARIO_TYPES: tuple[str, ...] = (
+    "congested_hard",
+    "head_on_narrow",
+)
+
+ALL_SCENARIO_TYPES: tuple[str, ...] = SCENARIO_TYPES + HARD_SCENARIO_TYPES
+
 #: The ego may not enter a cell within this many cells of an agent body.
 AGENT_INFLATION = 1
 
@@ -65,6 +73,7 @@ class Scenario:
     dt: float
     natural_route: list[Cell] = field(default_factory=list)
     config: dict[str, Any] = field(default_factory=dict)
+    base: str = ""            # the normal-tier type a hard variant is built from
 
     def occupied_at(self, t: int, inflate: int = 0) -> set[Cell]:
         """Cells covered by agent bodies at step ``t``."""
@@ -89,6 +98,7 @@ class Scenario:
     def summary(self) -> dict[str, Any]:
         return {
             "scenario": self.name,
+            "base": self.base or self.name,
             "seed": self.seed,
             "start": self.start,
             "goal": self.goal,
@@ -96,6 +106,37 @@ class Scenario:
             "time_limit": self.time_limit,
             "dt": self.dt,
         }
+
+
+def resolve_scenario_type(
+    name: str,
+    config: dict[str, Any] | None = None,
+    depot_config: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    """Return ``(base_type, scenario_config, depot_config)`` for ``name``.
+
+    A normal type resolves to itself with the configs untouched. A hard type
+    resolves to its base type with the tier overrides merged in, so the normal
+    tier can never be changed by editing a hard tier.
+    """
+    scenario_cfg = config if config is not None else load_config("scenarios")
+    depot_cfg = depot_config if depot_config is not None else load_config("depot")
+    if name in SCENARIO_TYPES:
+        return name, scenario_cfg, depot_cfg
+    hard = scenario_cfg.get("hard", {})
+    if name not in hard:
+        raise ValueError(
+            f"unknown scenario type {name!r}; expected one of {ALL_SCENARIO_TYPES}"
+        )
+    spec = hard[name]
+    base = str(spec["base"])
+    if base not in SCENARIO_TYPES:
+        raise ValueError(f"hard type {name!r} names an unknown base type {base!r}")
+    return (
+        base,
+        deep_merge(scenario_cfg, spec.get("scenarios", {})),
+        deep_merge(depot_cfg, spec.get("depot", {})),
+    )
 
 
 # --------------------------------------------------------------------- helpers
@@ -317,19 +358,19 @@ def generate_scenario(
     seed: int,
     config: dict[str, Any] | None = None,
     map_seed: int | None = None,
+    depot_config: dict[str, Any] | None = None,
 ) -> Scenario:
     """Generate the scenario of type ``name`` for ``seed``.
 
-    The same ``(name, seed)`` always yields an identical scenario.
+    ``name`` may be a normal type or one of :data:`HARD_SCENARIO_TYPES`. The
+    same ``(name, seed)`` always yields an identical scenario.
     """
-    if name not in SCENARIO_TYPES:
-        raise ValueError(f"unknown scenario type {name!r}; expected one of {SCENARIO_TYPES}")
-    cfg = config if config is not None else load_config("scenarios")
+    base, cfg, depot_cfg = resolve_scenario_type(name, config, depot_config)
     settings = cfg["scenario"]
     footprint = Footprint(*cfg["agent"]["footprint"])
     rng = np.random.default_rng(seed)
 
-    grid = generate_depot(seed=seed if map_seed is None else map_seed)
+    grid = generate_depot(seed=seed if map_seed is None else map_seed, config=depot_cfg)
     cost_map = grid.cost_map()
     min_cost = grid.min_cell_cost()
     reachable = connected_component(grid)
@@ -360,15 +401,15 @@ def generate_scenario(
             settings["min_time_limit"], settings["max_time_limit"],
         ))
 
-        if name == "empty":
+        if base == "empty":
             agents: list[Agent] | None = []
-        elif name == "crossing":
+        elif base == "crossing":
             agent = _place_crossing_agent(route, agent_mask, rng, cfg, footprint, horizon)
             agents = None if agent is None else [agent]
-        elif name == "head_on":
+        elif base == "head_on":
             agent = _place_head_on_agent(route, agent_mask, rng, cfg, footprint, horizon)
             agents = None if agent is None else [agent]
-        elif name == "blocked_then_clears":
+        elif base == "blocked_then_clears":
             agent = _place_blocker_agent(route, agent_mask, rng, cfg, footprint, horizon, anchors)
             agents = None if agent is None else [agent]
         else:  # congested
@@ -386,6 +427,7 @@ def generate_scenario(
         scenario = Scenario(
             name=name, seed=seed, grid=grid, start=start, goal=goal, agents=agents,
             time_limit=horizon, dt=float(cfg["dt"]), natural_route=list(route), config=cfg,
+            base=base,
         )
         if not _is_solvable_in_principle(scenario):
             last_failure = "goal not reachable once the agents come to rest"
@@ -404,4 +446,4 @@ def generate_batch(name: str, seeds: Sequence[int], config: dict[str, Any] | Non
 
 def scenario_generators() -> dict[str, Callable[..., Scenario]]:
     """Mapping from scenario name to a single-argument generator (for tests/CLI)."""
-    return {name: (lambda seed, n=name: generate_scenario(n, seed)) for name in SCENARIO_TYPES}
+    return {name: (lambda seed, n=name: generate_scenario(n, seed)) for name in ALL_SCENARIO_TYPES}
