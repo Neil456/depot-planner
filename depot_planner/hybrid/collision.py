@@ -44,6 +44,7 @@ class DistanceField:
         height_m: float,
         resolution: float = 0.1,
     ) -> "DistanceField":
+        """Rasterise ``rectangles`` and build the conservative distance field."""
         cols = int(round(width_m / resolution))
         rows = int(round(height_m / resolution))
         occupied = np.zeros((rows, cols), dtype=bool)
@@ -61,6 +62,7 @@ class DistanceField:
 
     @property
     def shape(self) -> tuple[int, int]:
+        """``(rows, cols)`` of the sampled field."""
         return self.distance.shape
 
     def distance_at(self, xs: np.ndarray, ys: np.ndarray) -> np.ndarray:
@@ -75,9 +77,6 @@ class DistanceField:
         if inside.any():
             out[inside] = self.distance[i[inside], j[inside]]
         return out
-
-    def occupied_mask(self) -> np.ndarray:
-        return self.distance <= 0.0
 
 
 class CarCollisionChecker:
@@ -120,15 +119,8 @@ class CarCollisionChecker:
         return bool(self.poses_are_free(np.asarray([pose], dtype=float))[0])
 
     def path_is_free(self, poses: Iterable[Pose]) -> bool:
+        """True if every pose along a path clears every obstacle."""
         array = np.asarray(list(poses), dtype=float)
         if array.size == 0:
             return True
         return bool(self.poses_are_free(array).all())
-
-    def first_collision(self, poses: Iterable[Pose]) -> int | None:
-        array = np.asarray(list(poses), dtype=float)
-        if array.size == 0:
-            return None
-        free = self.poses_are_free(array)
-        bad = np.flatnonzero(~free)
-        return int(bad[0]) if len(bad) else None

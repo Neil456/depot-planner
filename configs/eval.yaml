@@ -17,6 +17,14 @@ animation:
   dpi: 70
   figure_size: [6.4, 4.4]
 
+showcase:                  # the polished README animations
+  fps: 12                  # smooth playback without inflating the file
+  width_px: 800            # hero GIF width
+  side_by_side_width_px: 1000
+  dpi: 100
+  max_frames: 120
+  hold_frames: 14          # frames the last frame is held, so the outcome reads
+
 parking_animation:
   fps: 10
   dpi: 90

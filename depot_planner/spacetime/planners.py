@@ -20,7 +20,7 @@ from depot_planner.config import load_config
 from depot_planner.grid_astar.search import astar
 from depot_planner.spacetime import search as st
 from depot_planner.spacetime.collision import AgentOccupancy
-from depot_planner.world.grid import CellType, Grid
+from depot_planner.world.grid import Grid
 
 Cell = tuple[int, int]
 
@@ -74,10 +74,12 @@ class Planner:
         return self._cache
 
     def reset(self) -> None:
+        """Drop the per-scenario cache."""
         self._cache = None
         self._cached_for = None
 
     def plan(self, scenario, cell: Cell, t: int) -> PlanResult:  # pragma: no cover - interface
+        """Plan from ``cell`` at step ``t`` towards the scenario's goal."""
         raise NotImplementedError
 
 
@@ -87,6 +89,7 @@ class SpaceTimePlanner(Planner):
     name = "spacetime_astar"
 
     def prepare(self, scenario) -> _ScenarioCache:
+        """Also precompute the goal cost-to-go field the grid heuristic needs."""
         cached = super().prepare(scenario)
         if cached.goal_field is None and str(
             self.config["spacetime"]["heuristic"]
@@ -95,6 +98,7 @@ class SpaceTimePlanner(Planner):
         return cached
 
     def plan(self, scenario, cell: Cell, t: int) -> PlanResult:
+        """Plan a timed path that avoids the agents' known future trajectories."""
         cached = self.prepare(scenario)
         # Planning past the episode's own time limit cannot help, and searching that
         # far is what makes a hopeless replan expensive.
@@ -123,6 +127,7 @@ class BaselineReplanPlanner(Planner):
     replan_every = 1
 
     def plan(self, scenario, cell: Cell, t: int) -> PlanResult:
+        """Plan with the agents frozen where they stand at step ``t``."""
         cached = self.prepare(scenario)
         cfg = self.config["baseline"]
         began = time.perf_counter()
@@ -164,6 +169,7 @@ PLANNERS: dict[str, type[Planner]] = {
 
 
 def make_planner(name: str, config: dict[str, Any] | None = None) -> Planner:
+    """Construct a planner by name; raises on an unknown name."""
     if name not in PLANNERS:
         raise ValueError(f"unknown planner {name!r}; expected one of {sorted(PLANNERS)}")
     return PLANNERS[name](config)

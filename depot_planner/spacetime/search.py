@@ -56,10 +56,12 @@ class SpaceTimeResult:
 
     @property
     def horizon(self) -> int:
+        """Number of simulation steps the plan spans."""
         return 0 if not self.times else self.times[-1] - self.times[0]
 
     @property
     def path_length_m(self) -> float:
+        """Geometric length of the planned path."""
         if not self.cells:
             return 0.0
         return sum(
@@ -68,6 +70,7 @@ class SpaceTimeResult:
 
 
 def chebyshev(a: Cell, b: Cell) -> int:
+    """Chebyshev distance, the fewest steps any 8-connected path can take."""
     return max(abs(a[0] - b[0]), abs(a[1] - b[1]))
 
 

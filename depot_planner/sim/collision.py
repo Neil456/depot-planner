@@ -37,6 +37,7 @@ class CollisionReport:
     agent_id: int | None = None
 
     def describe(self) -> str:
+        """One-line summary for logs and the report."""
         if self.ok:
             return "no collision"
         return f"{self.kind} at step {self.step} (t={self.time}) cell {self.cell} agent {self.agent_id}"

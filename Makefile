@@ -20,10 +20,12 @@ gifs:
 	$(PYTHON) scripts/demo_parking.py
 	$(PYTHON) scripts/make_gifs.py
 	$(PYTHON) scripts/make_parking_gifs.py
+	$(PYTHON) scripts/make_showcase.py
 
 report:
 	$(PYTHON) scripts/bench_cpp.py
 	$(PYTHON) scripts/make_report.py
+	$(PYTHON) scripts/make_readme.py
 
 all: setup test step1 battery gifs report
 

@@ -1,6 +1,6 @@
 # Progress
 
-Read this first. Status of each step from `TASK.md`.
+Read this first. Status of each step from [`TASK.md`](TASK.md).
 
 - [x] **Step 1: Grid A* with driving cost map** — done. Occupancy grid + EDT proximity
       penalty, one generic best-first search (Dijkstra / A* / weighted A*), deterministic
@@ -36,16 +36,21 @@ Read this first. Status of each step from `TASK.md`.
       `head_on_narrow` with a 50 ms per-replan budget; `parallel_minimal`,
       `perpendicular_minimal` with minimum-clearance gaps and a 5000-expansion cap.
       30 episodes per type, nothing tuned afterwards.
-- [x] **CI** — `.github/workflows/tests.yml` runs `pytest -q` on push and pull request.
+- [x] **CI** — `.github/workflows/tests.yml` runs `pytest -q` on push.
+- [x] **Public-repo polish** — hero and side-by-side GIFs, README rewritten with
+      generated tables, MIT licence, dead code removed, docstrings completed, project
+      docs moved into `docs/`. No planner behaviour or recorded result changed.
 
 ## How to run
 
 ```
-make setup     # pip install -e ".[dev]"
-make test      # 120 tests, ~55 s
+make setup     # pip install -e ".[dev]"  (also builds the optional C++ core)
+make test      # the test suite
 make step1     # results/step1/compare.png
-make battery   # both batteries, ~90 s
-make gifs      # all GIFs and demo PNGs, ~75 s
+make battery   # both tiers of both batteries
+make gifs      # every GIF and demo figure, including the README showcase
+make report    # regenerates REPORT.md and the README's generated tables
+make all       # all of the above, in order
 ```
 
 Run the suite with `make test` (= `python3 -m pytest -q`); see `DECISIONS.md` for why the

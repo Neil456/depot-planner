@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Sequence
 
 import pandas as pd
 
@@ -45,6 +45,7 @@ def markdown_table(
 
 
 def read_csv(path: Path, description: str) -> pd.DataFrame:
+    """Read a battery CSV, or explain which `make` target produces it."""
     if not Path(path).is_file():
         raise FileNotFoundError(
             f"{description} is missing ({path}). Run `make battery` before `make report`."
@@ -66,9 +67,3 @@ def combine_tiers(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
             part["tier"] = tier
         parts.append(part)
     return pd.concat(parts, ignore_index=True)
-
-
-def summary_line(values: Sequence[float], formatter: Callable[[float], str] = lambda v: f"{v:.2f}") -> str:
-    if len(values) == 0:
-        return "—"
-    return f"{formatter(float(min(values)))} – {formatter(float(max(values)))}"

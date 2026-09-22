@@ -8,11 +8,10 @@ step is ``dt`` seconds and an agent moves at most one cell per step, or pauses.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Sequence
+from typing import Iterable, Sequence
 
 import numpy as np
 
-from depot_planner.config import load_config
 from depot_planner.world.grid import CellType, Grid
 
 Cell = tuple[int, int]
@@ -27,9 +26,11 @@ class Footprint:
 
     @property
     def offsets(self) -> tuple[Cell, ...]:
+        """Cell offsets from the anchor, row-major."""
         return tuple((i, j) for i in range(self.width) for j in range(self.height))
 
     def cells(self, anchor: Cell) -> frozenset[Cell]:
+        """The cells this footprint covers at ``anchor``."""
         ax, ay = anchor
         return frozenset((ax + i, ay + j) for i, j in self.offsets)
 
@@ -99,9 +100,6 @@ class Agent:
         self._cache[key] = grown
         return grown
 
-    def positions(self) -> np.ndarray:
-        return self.timeline.copy()
-
 
 def occupancy_at(agents: Iterable[Agent], t: int, inflate: int = 0) -> set[Cell]:
     """Union of the agents' (optionally inflated) footprints at step ``t``."""
@@ -163,8 +161,3 @@ def timed_path(
     if len(anchors) < total_steps + 1:
         anchors.extend([anchors[-1]] * (total_steps + 1 - len(anchors)))
     return np.asarray(anchors[: total_steps + 1], dtype=int)
-
-
-def agent_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
-    cfg = config if config is not None else load_config("scenarios")
-    return cfg["agent"]
