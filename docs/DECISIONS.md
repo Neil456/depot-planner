@@ -477,3 +477,37 @@ One line per decision: what was chosen and why.
   built rather than silently testing the fallback), a C++ job that also runs
   `clang-format --Werror` and a benchmark smoke run, and the sanitizer job. The C++ jobs
   fetch GoogleTest and Google Benchmark at configure time; the Python job never does.
+
+## C++ step 7 (optional) — the closed-loop runner
+
+- **The Python loop stays the default.** It hands every executed step to
+  `sim/collision.py` as the episode runs, so an illegal step stops the episode the moment it
+  happens, checked by code that shares nothing with any planner. That is the project's
+  strongest safety property and it is not worth trading for 1.6x. The C++ loop is opt-in:
+  `run_episode(..., engine="cpp")` and `scripts/run_battery.py --engine cpp`.
+- **The independent checker is still the auditor of record under either loop.** It is
+  untouched, and `run_battery` re-checks every finished episode with it whichever loop ran,
+  so a C++ episode that a planner believed was safe still has to survive it.
+- The C++ loop needs *some* in-loop legality rule to know when to stop, so `runner.cpp`
+  carries a transcription of the same rule set, written from the specification rather than
+  from the planner's collision model. It is a third implementation, and what pins it to the
+  Python one is the equivalence sweep: 420 episodes across both tiers and both planners
+  agree on every metric, including `collision_step` and the formatted `collision_detail`.
+- **The hard tier cannot be compared step for step, so it is compared without its budget.**
+  Its 50 ms per-replan budget is wall clock, and one hard seed re-run four times on the
+  *same* engine gave four different expansion counts and four different paths. The runner
+  sweep therefore drops the budget for hard-tier scenarios, which keeps the harder geometry
+  in the comparison and makes an exact comparison meaningful. That non-reproducibility was
+  already documented in REPORT.md section 5; this is the same fact biting again.
+- **1.6x, and the reason it is only 1.6x, is the interesting part.** Before the port, a
+  battery episode was dominated by planning. Now the planners are 25-40x faster, and what is
+  left of an episode is the per-step checker call, the list appends and the result
+  marshalling — about 40% of it, and the C++ loop removes most of that. A whole normal-tier
+  battery run moves from 5.9 s to 5.5 s, because scenario generation and the final audit are
+  now the bulk of it. Optimising the loop further would mean moving scenario generation into
+  C++, which is exactly the code the brief wants to stay in Python.
+- `EpisodeResult` is rebuilt on the Python side from the core's raw fields, including
+  constructing a `CollisionReport` and calling its `describe()`, so the reason strings come
+  from one implementation rather than two that have to be kept in step.
+- The C++ loop refuses a planner it does not implement, and refuses one pinned to
+  `backend="python"`, rather than silently falling back to the Python loop.

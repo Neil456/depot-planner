@@ -14,6 +14,7 @@
 #include "depot/grid_search.hpp"
 #include "depot/hybrid.hpp"
 #include "depot/reeds_shepp.hpp"
+#include "depot/runner.hpp"
 #include "depot/spacetime.hpp"
 #include "depot/types.hpp"
 
@@ -104,8 +105,9 @@ std::vector<depot::AgentTimeline> ToAgents(const py::sequence& agents) {
   out.reserve(static_cast<std::size_t>(py::len(agents)));
   for (const py::handle& item : agents) {
     auto entry = item.cast<py::tuple>();
-    if (entry.size() != 3) {
-      throw std::invalid_argument("each agent must be a (timeline, width, height) tuple");
+    if (entry.size() != 3 && entry.size() != 4) {
+      throw std::invalid_argument(
+          "each agent must be a (timeline, width, height) or (timeline, width, height, id) tuple");
     }
     auto timeline = entry[0].cast<IntArray>();
     if (timeline.ndim() != 2 || timeline.shape(1) != 2) {
@@ -114,6 +116,7 @@ std::vector<depot::AgentTimeline> ToAgents(const py::sequence& agents) {
     depot::AgentTimeline agent;
     agent.width = entry[1].cast<int>();
     agent.height = entry[2].cast<int>();
+    agent.id = entry.size() == 4 ? entry[3].cast<int>() : 0;
     const auto steps = static_cast<std::size_t>(timeline.shape(0));
     agent.anchors.reserve(steps);
     const std::int64_t* rows = timeline.data();
@@ -198,6 +201,92 @@ py::array_t<double> ObstacleDistance(BoolArray drivable, double resolution) {
     field = depot::ObstacleDistance(view, resolution);
   }
   return ToArray(field);
+}
+
+/// Run one closed-loop episode entirely in the core.
+py::dict RunEpisode(DoubleArray cost_grid, std::pair<int, int> start, std::pair<int, int> goal,
+                    py::sequence agents, py::object heuristic_field, py::dict settings) {
+  const depot::CostMapView cost = ViewOf(cost_grid, "cost_grid");
+  depot::AgentOccupancy occupancy(ToAgents(agents), settings["inflate"].cast<int>());
+
+  DoubleArray field_array;
+  depot::CostMapView field;
+  if (!heuristic_field.is_none()) {
+    field_array = heuristic_field.cast<DoubleArray>();
+    field = ViewOf(field_array, "heuristic_field");
+  }
+
+  depot::EpisodeOptions options;
+  options.replan_every = settings["replan_every"].cast<int>();
+  options.record_plans = settings["record_plans"].cast<bool>();
+  options.hold_on_plan_failure = settings["hold_on_plan_failure"].cast<bool>();
+  options.time_limit = settings["time_limit"].cast<int>();
+  options.planner = settings["planner"].cast<std::string>() == "baseline"
+                        ? depot::PlannerKind::kBaselineSnapshot
+                        : depot::PlannerKind::kSpaceTime;
+  options.spacetime.time_cost = settings["time_cost"].cast<double>();
+  options.spacetime.relax_margin_when_inside = settings["relax_margin_when_inside"].cast<bool>();
+  options.spacetime.heuristic_includes_time = settings["heuristic_includes_time"].cast<bool>();
+  options.spacetime.min_cell_cost = settings["min_cell_cost"].cast<double>();
+  options.spacetime.horizon_cap = settings["horizon_cap"].cast<int>();
+  options.spacetime.limits.max_nodes = settings["max_nodes"].cast<std::int64_t>();
+  options.spacetime.limits.time_limit_ms = settings["time_limit_ms"].cast<double>();
+  options.baseline_hold_on_failure = settings["baseline_hold_on_failure"].cast<bool>();
+  options.baseline_limits.max_nodes = settings["baseline_max_nodes"].cast<std::int64_t>();
+  options.baseline_limits.time_limit_ms = settings["baseline_time_limit_ms"].cast<double>();
+  options.min_cell_cost = settings["min_cell_cost"].cast<double>();
+
+  depot::EpisodeOutcome outcome;
+  {
+    py::gil_scoped_release release;
+    outcome = depot::RunEpisode(cost, depot::Cell{start.first, start.second},
+                                depot::Cell{goal.first, goal.second}, occupancy, field, options);
+  }
+
+  py::list times;
+  for (int t : outcome.times) times.append(t);
+  py::list plans;
+  for (const depot::IssuedPlan& plan : outcome.plans) {
+    plans.append(py::make_tuple(plan.issued_at, PathToList(plan.cells)));
+  }
+  py::list reasons;
+  for (const auto& entry : outcome.plan_failure_reasons) {
+    reasons.append(py::make_tuple(entry.first, entry.second));
+  }
+
+  py::dict result;
+  result["success"] = outcome.success;
+  result["collision"] = outcome.collision;
+  result["timeout"] = outcome.timeout;
+  result["steps"] = outcome.steps;
+  result["cells"] = PathToList(outcome.cells);
+  result["times"] = times;
+  result["plans"] = plans;
+  result["wait_steps"] = outcome.wait_steps;
+  result["nodes_expanded"] = outcome.nodes_expanded;
+  result["replans"] = outcome.replans;
+  result["plan_failures"] = outcome.plan_failures;
+  result["mean_planning_ms"] = outcome.mean_planning_ms;
+  result["max_planning_ms"] = outcome.max_planning_ms;
+  result["path_length_cells"] = outcome.path_length_cells;
+  result["reason_override"] = outcome.reason_override;
+  result["collision_kind"] = outcome.collision_kind;
+  if (outcome.collision) {
+    result["collision_step"] = outcome.collision_step;
+    result["collision_time"] = outcome.collision_time;
+    result["collision_cell"] = py::make_tuple(outcome.collision_cell.x, outcome.collision_cell.y);
+  } else {
+    result["collision_step"] = py::none();
+    result["collision_time"] = py::none();
+    result["collision_cell"] = py::none();
+  }
+  if (outcome.collision_has_agent) {
+    result["collision_agent"] = outcome.collision_agent;
+  } else {
+    result["collision_agent"] = py::none();
+  }
+  result["plan_failure_reasons"] = reasons;
+  return result;
 }
 
 /// The car described by configs/hybrid.yaml.
@@ -353,6 +442,11 @@ PYBIND11_MODULE(_cpp, m) {
         py::arg("max_nodes"), py::arg("time_limit_ms"),
         "Grid A* with the agents frozen where they stand at `step`.\n\n"
         "Returns (success, path, cost, nodes_expanded, runtime_ms, reason).");
+
+  m.def("run_episode", &RunEpisode, py::arg("cost_grid"), py::arg("start"), py::arg("goal"),
+        py::arg("agents"), py::arg("heuristic_field"), py::arg("settings"),
+        "Run one closed-loop episode entirely in the core.\n\n"
+        "Returns a dict with the same metric names as EpisodeResult in sim/runner.py.");
 
   m.def("hybrid_plan", &HybridPlan, py::arg("start"), py::arg("goal"), py::arg("car"),
         py::arg("distance_field"), py::arg("field_resolution"), py::arg("heuristic_field"),

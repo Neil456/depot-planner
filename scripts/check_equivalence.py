@@ -199,11 +199,59 @@ def check_hybrid(episodes: int, ties: list[str]) -> int:
     return checked
 
 
+def check_runner(episodes: int, ties: list[str]) -> int:
+    """The C++ closed-loop runner against the Python one, on every battery seed.
+
+    The hard tier's 50 ms per-replan budget is wall clock, so an episode there is
+    not reproducible even against *itself* on the same engine: re-running one
+    seed four times gives four different expansion counts. Its scenarios are
+    therefore run here with the budget removed, which keeps the harder geometry
+    in the comparison and makes the comparison mean something.
+    """
+    from depot_planner.sim.runner import run_episode
+
+    fields = ("success", "collision", "timeout", "steps", "cells", "times", "wait_steps",
+              "nodes_expanded", "replans", "plan_failures", "reason", "collision_step",
+              "collision_detail", "plan_failure_reasons", "plans", "path_length_m")
+    checked = 0
+    for tier in ("normal", "hard"):
+        cfg = tier_settings(tier)
+        types = list(cfg.get("scenario_types", SCENARIO_TYPES))
+        count = episodes if episodes else int(cfg["episodes_per_type"])
+        seeds = battery_seeds(count, int(cfg["seed_offset"]))
+        for scenario_type in types:
+            for seed in seeds:
+                scenario = generate_scenario(scenario_type, seed)
+                for planner_name in ("spacetime_astar", "baseline_replan"):
+                    episodes_by_engine = {
+                        engine: run_episode(
+                            scenario, make_planner(planner_name), engine=engine
+                        )
+                        for engine in ("python", "cpp")
+                    }
+                    python_episode = episodes_by_engine["python"]
+                    cpp_episode = episodes_by_engine["cpp"]
+                    differing = [
+                        name for name in fields
+                        if getattr(python_episode, name) != getattr(cpp_episode, name)
+                    ]
+                    if differing:
+                        raise Divergence(
+                            f"{tier}/{scenario_type} seed={seed} {planner_name}: "
+                            f"{differing} differ\n"
+                            f"  python: {python_episode.reason!r} steps={python_episode.steps}\n"
+                            f"  cpp   : {cpp_episode.reason!r} steps={cpp_episode.steps}"
+                        )
+                    checked += 1
+    return checked
+
+
 SECTIONS: dict[str, Callable[[int, list[str]], int]] = {
     "grid": check_grid,
     "fields": check_fields,
     "spacetime": check_spacetime,
     "hybrid": check_hybrid,
+    "runner": check_runner,
 }
 
 

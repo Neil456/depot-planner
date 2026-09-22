@@ -12,6 +12,7 @@ import time
 
 from depot_planner import core
 from depot_planner.config import results_path
+from depot_planner.sim.runner import DEFAULT_ENGINE as RUNNER_DEFAULT_ENGINE
 from depot_planner.eval.battery import (
     TIERS,
     run_battery,
@@ -28,16 +29,17 @@ COLUMNS = [
 ]
 
 
-def run_tier(tier: str, backend: str | None) -> None:
+def run_tier(tier: str, backend: str | None, engine: str | None) -> None:
     settings = tier_settings(tier)
     planner_config = tier_planner_config(tier)
     budget = None if planner_config is None else planner_config["spacetime"]["time_limit_ms"]
-    print(f"\n=== {tier} tier ({core.resolve(backend)} backend) ===")
+    print(f"\n=== {tier} tier ({core.resolve(backend)} backend, "
+          f"{core.resolve(engine or RUNNER_DEFAULT_ENGINE)} runner) ===")
     print(f"scenarios: {', '.join(settings.get('scenario_types', ['(all normal types)']))}")
     print(f"episodes per type: {settings['episodes_per_type']}, seed offset {settings['seed_offset']}"
           + (f", planning budget {budget:.0f} ms/replan" if budget else ""))
     began = time.perf_counter()
-    frame = run_battery(tier=tier, backend=backend)
+    frame = run_battery(tier=tier, backend=backend, engine=engine)
     out = write_battery(frame, results_path(tier_csv(tier, backend)))
     summary = summarise(frame)
     print()
@@ -50,9 +52,12 @@ def main() -> None:
     parser.add_argument("--tier", choices=(*TIERS, "all"), default="all")
     parser.add_argument("--backend", choices=core.BACKENDS, default="auto",
                         help="planner implementation: the C++ core, or the Python reference")
+    parser.add_argument("--engine", choices=core.BACKENDS, default=RUNNER_DEFAULT_ENGINE,
+                        help="closed-loop runner: the Python loop (the default, which checks "
+                             "every executed step with the independent checker) or the core")
     args = parser.parse_args()
     for tier in (TIERS if args.tier == "all" else (args.tier,)):
-        run_tier(tier, args.backend)
+        run_tier(tier, args.backend, args.engine)
 
 
 if __name__ == "__main__":

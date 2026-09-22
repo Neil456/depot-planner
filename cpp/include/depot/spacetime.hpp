@@ -31,6 +31,9 @@ struct AgentTimeline {
   std::vector<Cell> anchors;
   int width = 2;
   int height = 2;
+  /// The Python Agent's own id, carried through so a collision report can name
+  /// the same vehicle the reference names.
+  int id = 0;
 
   Cell AnchorAt(int t) const {
     if (anchors.empty()) return Cell{};

@@ -68,6 +68,7 @@ def run_battery(
     verbose: bool = True,
     tier: str = "normal",
     backend: str | None = None,
+    engine: str | None = None,
 ) -> pd.DataFrame:
     """Run one tier of the battery and return one row per episode.
 
@@ -76,7 +77,8 @@ def run_battery(
     planner believed was safe but which the checker rejects raises immediately.
 
     ``backend`` picks the planner implementation: ``"cpp"``, ``"python"`` for
-    the reference, or ``None`` for the default.
+    the reference, or ``None`` for the default. ``engine`` picks the closed-loop
+    runner itself, which defaults to the Python one.
     """
     cfg = tier_settings(tier, config)
     episodes = int(episodes_per_type if episodes_per_type is not None else cfg["episodes_per_type"])
@@ -95,7 +97,7 @@ def run_battery(
             scenario = generate_scenario(scenario_type, seed)
             for planner_name in names:
                 planner = make_planner(planner_name, planner_config, backend)
-                episode = run_episode(scenario, planner)
+                episode = run_episode(scenario, planner, engine=engine)
                 report = verify_episode(scenario, episode)
                 if episode.success and not report.ok:
                     raise AssertionError(

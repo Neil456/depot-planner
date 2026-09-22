@@ -105,7 +105,16 @@ orchestration, the independent collision checkers, plotting and reports.
       (which asserts the core was actually built), a C++ job running `clang-format --Werror`,
       ctest and a benchmark smoke run, and a third running the same 59 GoogleTest cases under
       AddressSanitizer and UndefinedBehaviorSanitizer.
-- [ ] C++ step 7 (optional): closed-loop runner in C++
+- [x] **C++ step 7 (optional): closed-loop runner in C++** — done. `cpp/src/runner.cpp`
+      runs a whole episode — replan cadence, plan execution, plan-failure holding, the
+      per-step legality check and every metric — without returning to Python. It is opt-in
+      (`run_episode(..., engine="cpp")`, `scripts/run_battery.py --engine cpp`); the Python
+      loop stays the default because it hands every executed step to the untouched
+      independent checker as the episode runs, which is the project's strongest safety
+      property. `scripts/check_equivalence.py --section runner` compares 420 episodes across
+      both tiers and both planners: identical on every metric. The loop itself is **1.6x**
+      faster — a modest number, and the honest one: with the planners already in C++, the
+      per-step Python overhead was only about 40% of an episode.
 - [ ] C++ step 8: README architecture and build documentation
 
 ## How to run

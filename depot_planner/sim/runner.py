@@ -12,12 +12,23 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
+
+from depot_planner import core
 from depot_planner.config import load_config
+from depot_planner.grid_astar import backend as _grid_backend
 from depot_planner.sim.collision import CollisionReport, check_trajectory
-from depot_planner.spacetime.planners import Planner
+from depot_planner.spacetime import search as st
+from depot_planner.spacetime.planners import BaselineReplanPlanner, Planner, SpaceTimePlanner
 from depot_planner.world.scenarios import Scenario
 
 Cell = tuple[int, int]
+
+#: Which implementation of the loop to run. The Python loop is the default and
+#: the reference: it calls the independent collision checker on every executed
+#: step, which is the project's strongest safety property. ``"cpp"`` runs the
+#: whole episode in the core and is verified against it (see docs/DECISIONS.md).
+DEFAULT_ENGINE = "python"
 
 
 @dataclass
@@ -88,9 +99,17 @@ def run_episode(
     scenario: Scenario,
     planner: Planner,
     config: dict[str, Any] | None = None,
+    engine: str | None = None,
 ) -> EpisodeResult:
-    """Run ``planner`` on ``scenario`` in closed loop and return the metrics."""
+    """Run ``planner`` on ``scenario`` in closed loop and return the metrics.
+
+    ``engine`` selects the loop itself, not the planner: ``"python"`` (the
+    default) runs this function and checks every executed step with the
+    independent checker, ``"cpp"`` runs the whole episode in the core.
+    """
     cfg = config if config is not None else load_config("sim")
+    if core.resolve(engine if engine is not None else DEFAULT_ENGINE) == "cpp":
+        return _run_episode_cpp(scenario, planner, cfg)
     replan_every = int(planner.replan_every or cfg["replan_every"])
     record_plans = bool(cfg["record_plans"])
     hold_on_failure = bool(cfg["hold_on_plan_failure"])
@@ -157,6 +176,123 @@ def run_episode(
 
     return _finish(scenario, planner, cells, times, plans, timings, nodes, replans,
                    plan_failures, collision, "", failure_reasons)
+
+
+def _run_episode_cpp(
+    scenario: Scenario, planner: Planner, cfg: dict[str, Any]
+) -> EpisodeResult:
+    """Run the whole episode in the core and rebuild the same EpisodeResult.
+
+    Only the two planners the core implements can drive it; anything else is an
+    error rather than a silent fall back to the Python loop.
+    """
+    if planner.backend is not None and core.resolve(planner.backend) == "python":
+        raise ValueError(
+            "the C++ episode runner cannot drive a planner pinned to the Python backend"
+        )
+    if isinstance(planner, SpaceTimePlanner):
+        kind = "spacetime"
+    elif isinstance(planner, BaselineReplanPlanner):
+        kind = "baseline"
+    else:
+        raise ValueError(
+            f"the C++ episode runner does not implement the planner {planner.name!r}"
+        )
+
+    cached = planner.prepare(scenario)
+    effective = _grid_backend.effective_cost_map(cached.cost_map, cached.drivable)
+    spacetime_cfg = planner.config["spacetime"]
+    baseline_cfg = planner.config["baseline"]
+
+    field = None
+    if kind == "spacetime" and str(spacetime_cfg["heuristic"]).lower() == "grid_dijkstra":
+        field = cached.goal_field
+        if field is None:
+            field = st.goal_cost_field(effective, np.isfinite(effective), scenario.goal)
+        field = np.ascontiguousarray(np.asarray(field, dtype=float))
+
+    def budget(value: Any) -> float:
+        return -1.0 if value is None else float(value)
+
+    settings = {
+        "replan_every": int(planner.replan_every or cfg["replan_every"]),
+        "record_plans": bool(cfg["record_plans"]),
+        "hold_on_plan_failure": bool(cfg["hold_on_plan_failure"]),
+        "time_limit": int(scenario.time_limit),
+        "planner": kind,
+        "time_cost": float(spacetime_cfg["time_cost"]),
+        "inflate": int(spacetime_cfg["inflate"] if kind == "spacetime" else baseline_cfg["inflate"]),
+        "relax_margin_when_inside": bool(spacetime_cfg["relax_margin_when_inside"]),
+        "heuristic_includes_time": bool(spacetime_cfg["heuristic_includes_time"]),
+        "min_cell_cost": float(cached.min_cell_cost),
+        # The space-time planner clamps its horizon to the episode's own limit.
+        "horizon_cap": min(int(spacetime_cfg["max_time_horizon"]), int(scenario.time_limit)),
+        "max_nodes": int(spacetime_cfg["max_nodes"]),
+        "time_limit_ms": budget(spacetime_cfg.get("time_limit_ms")),
+        "baseline_hold_on_failure": bool(baseline_cfg["hold_on_failure"]),
+        "baseline_max_nodes": int(load_config("grid")["search"]["max_nodes"]),
+        "baseline_time_limit_ms": budget(baseline_cfg.get("time_limit_ms")),
+    }
+
+    out = core.require().run_episode(
+        effective,
+        (int(scenario.start[0]), int(scenario.start[1])),
+        (int(scenario.goal[0]), int(scenario.goal[1])),
+        [
+            (agent.timeline, int(agent.footprint.width), int(agent.footprint.height),
+             int(agent.agent_id))
+            for agent in scenario.agents
+        ],
+        field,
+        settings,
+    )
+
+    collision = None
+    if out["collision"]:
+        collision = CollisionReport(
+            False, str(out["collision_kind"]), int(out["collision_step"]),
+            int(out["collision_time"]),
+            tuple(int(v) for v in out["collision_cell"]),
+            None if out["collision_agent"] is None else int(out["collision_agent"]),
+        )
+
+    cells = [(int(x), int(y)) for x, y in out["cells"]]
+    reason_override = str(out["reason_override"])
+    if reason_override:
+        reason = reason_override
+    elif collision is not None:
+        reason = collision.describe()
+    elif out["success"]:
+        reason = "goal reached"
+    else:
+        reason = "time limit reached"
+
+    steps = int(out["steps"])
+    return EpisodeResult(
+        scenario=scenario.name,
+        seed=scenario.seed,
+        planner=planner.name,
+        success=bool(out["success"]),
+        collision=bool(out["collision"]),
+        timeout=bool(out["timeout"]),
+        steps=steps,
+        time_to_goal_s=steps * scenario.dt if out["success"] else float("nan"),
+        path_length_m=float(out["path_length_cells"]) * scenario.grid.resolution,
+        wait_steps=int(out["wait_steps"]),
+        nodes_expanded=int(out["nodes_expanded"]),
+        replans=int(out["replans"]),
+        plan_failures=int(out["plan_failures"]),
+        mean_planning_ms=float(out["mean_planning_ms"]),
+        max_planning_ms=float(out["max_planning_ms"]),
+        reason=reason,
+        cells=cells,
+        times=[int(t) for t in out["times"]],
+        plans=[(int(when), [(int(x), int(y)) for x, y in plan]) for when, plan in out["plans"]],
+        collision_step=None if collision is None else collision.step,
+        collision_detail="" if collision is None else collision.describe(),
+        plan_failure_reasons={str(name): int(count) for name, count in
+                              out["plan_failure_reasons"]},
+    )
 
 
 def _finish(
