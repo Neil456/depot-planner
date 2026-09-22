@@ -11,6 +11,7 @@ set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 add_executable(depot_tests
+  test_distance_field.cpp
   test_grid_search.cpp
 )
 target_link_libraries(depot_tests PRIVATE depot_core GTest::gtest_main)

@@ -1,8 +1,9 @@
-"""Dispatch between the pure-Python step-1 search and the optional C++ core.
+"""Dispatch between the pure-Python step-1 search and the C++ core.
 
 The C++ extension (``depot_planner._cpp``, built from the ``cpp/`` library) is a
 drop-in replacement for the step-1 search. The Python implementation is kept as
-the reference and is still used when the extension is missing.
+the reference and is still used when the extension is missing, or when a call
+asks for something the core does not report.
 """
 
 from __future__ import annotations
@@ -11,10 +12,7 @@ import math
 
 import numpy as np
 
-try:  # pragma: no cover - depends on whether the extension was built
-    from depot_planner import _cpp
-except ImportError:  # pragma: no cover
-    _cpp = None
+from depot_planner import core
 
 #: Heuristic names the C++ core implements, mapped to its ``weight`` argument.
 _ZERO_HEURISTICS = frozenset({"none", "zero", "dijkstra"})
@@ -23,12 +21,12 @@ _OCTILE_HEURISTICS = frozenset({"octile", "astar", "a*"})
 
 def extension_available() -> bool:
     """True if the compiled core is importable."""
-    return _cpp is not None
+    return core.available()
 
 
 def backend_name() -> str:
     """``"cpp"`` when the compiled core is importable, else ``"python"``."""
-    return "cpp" if extension_available() else "python"
+    return "cpp" if core.available() else "python"
 
 
 def heuristic_weight(heuristic: str, weight: float) -> float | None:
@@ -71,11 +69,7 @@ def solve(
     time_limit_ms: float | None,
 ) -> tuple[bool, list[tuple[int, int]] | None, float, int, float, str]:
     """Run the C++ core. Raises ``RuntimeError`` if it was not built."""
-    if _cpp is None:  # pragma: no cover - only without the extension
-        raise RuntimeError(
-            "the C++ core is not built; reinstall with `pip install -e .` or use backend='python'"
-        )
-    success, path, cost, nodes, runtime_ms, reason = _cpp.grid_astar(
+    success, path, cost, nodes, runtime_ms, reason = core.require().grid_astar(
         cost_map,
         (int(start[0]), int(start[1])),
         (int(goal[0]), int(goal[1])),
@@ -85,6 +79,13 @@ def solve(
     )
     cells = [(int(x), int(y)) for x, y in path] if success else None
     return bool(success), cells, float(cost), int(nodes), float(runtime_ms), str(reason)
+
+
+def solve_field(cost_map: np.ndarray, sources: list[tuple[int, int]]) -> np.ndarray:
+    """Run the C++ Dijkstra field. Raises ``RuntimeError`` if it was not built."""
+    return core.require().dijkstra_field(
+        cost_map, [(int(x), int(y)) for x, y in sources]
+    )
 
 
 def can_use_cpp(

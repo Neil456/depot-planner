@@ -9,6 +9,7 @@ from typing import Any, Iterable, Sequence
 import numpy as np
 from scipy.ndimage import distance_transform_edt
 
+from depot_planner import core
 from depot_planner.config import load_config
 from depot_planner.hybrid.car import CarModel, Pose
 
@@ -43,6 +44,7 @@ class DistanceField:
         width_m: float,
         height_m: float,
         resolution: float = 0.1,
+        backend: str | None = None,
     ) -> "DistanceField":
         """Rasterise ``rectangles`` and build the conservative distance field."""
         cols = int(round(width_m / resolution))
@@ -56,7 +58,10 @@ class DistanceField:
             if i1 > i0 and j1 > j0:
                 occupied[i0:i1, j0:j1] = True
         free = ~occupied
-        cells = distance_transform_edt(free)
+        if core.resolve(backend) == "cpp":
+            cells = core.require().distance_transform(np.ascontiguousarray(free))
+        else:
+            cells = distance_transform_edt(free)
         distance = np.maximum(cells - math.sqrt(2.0), 0.0) * resolution
         return cls(distance, resolution, width_m, height_m)
 

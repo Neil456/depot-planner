@@ -57,7 +57,16 @@ orchestration, the independent collision checkers, plotting and reports.
       `make cpp-bench` build, so an install never downloads them. `.clang-format`,
       `make format`, `make format-check` and `make cpp-test` added. 11 GoogleTest
       cases and 170 pytest tests green.
-- [ ] C++ step 2: shared core types, templated grid search, distance field in C++
+- [x] **C++ step 2: shared core types, templated grid search, distance field** — done.
+      `include/depot/types.hpp` holds `Cell`, `Pose`, `Path`, the owning `Grid2D<T>` and the
+      borrowing `GridView<T>`, `SearchLimits` and `SearchResult`. One templated
+      `BestFirstSearch` serves Dijkstra, A* and weighted A* through heuristic functors,
+      with the Python heap's `(f, g, insertion order)` tie-break preserved. The Dijkstra
+      cost-to-go field and an exact integer Euclidean distance transform are in C++ too,
+      and `Grid.obstacle_distance`, `dijkstra_field` and the parking `DistanceField` all
+      use them. 18 GoogleTest cases; pytest compares the two backends on 200 random
+      start/goal pairs x 3 variants (identical costs, paths and node counts), 200 random
+      masks against scipy, and every parking distance field, all bit-identical.
 - [ ] C++ step 3: space-time A* and the snapshot baseline in C++
 - [ ] C++ step 4: hybrid A* and Reeds-Shepp in C++
 - [ ] C++ step 5: pipeline defaults to the C++ backend; batteries and REPORT.md rerun

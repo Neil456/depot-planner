@@ -19,11 +19,11 @@ void Block(std::vector<double>& map, int cols, int x, int y) {
   map[static_cast<std::size_t>(y) * cols + x] = kInf;
 }
 
-depot::GridSearchResult Solve(const std::vector<double>& map, int rows, int cols, depot::Cell start,
-                            depot::Cell goal, double weight = 1.0) {
+depot::SearchResult Solve(const std::vector<double>& map, int rows, int cols, depot::Cell start,
+                          depot::Cell goal, double weight = 1.0) {
   depot::GridSearchOptions options;
   options.weight = weight;
-  return depot::GridSearch(map.data(), rows, cols, start, goal, options);
+  return depot::GridSearch(depot::CostMapView(map.data(), rows, cols), start, goal, options);
 }
 
 double PathCost(const std::vector<double>& map, int cols, const std::vector<depot::Cell>& path) {
@@ -121,8 +121,9 @@ TEST(GridSearch, HonoursTheNodeCap) {
   const int rows = 40, cols = 40;
   const auto map = UniformMap(rows, cols, 1.0);
   depot::GridSearchOptions options;
-  options.max_nodes = 12;
-  const auto result = depot::GridSearch(map.data(), rows, cols, {0, 0}, {39, 39}, options);
+  options.limits.max_nodes = 12;
+  const auto result =
+      depot::GridSearch(depot::CostMapView(map.data(), rows, cols), {0, 0}, {39, 39}, options);
   EXPECT_FALSE(result.success);
   EXPECT_EQ(result.reason, "node limit reached");
   EXPECT_EQ(result.nodes_expanded, 12);
@@ -132,8 +133,9 @@ TEST(GridSearch, AZeroBudgetExpiresImmediately) {
   const int rows = 40, cols = 40;
   const auto map = UniformMap(rows, cols, 1.0);
   depot::GridSearchOptions options;
-  options.time_limit_ms = 0.0;
-  const auto result = depot::GridSearch(map.data(), rows, cols, {0, 0}, {39, 39}, options);
+  options.limits.time_limit_ms = 0.0;
+  const auto result =
+      depot::GridSearch(depot::CostMapView(map.data(), rows, cols), {0, 0}, {39, 39}, options);
   EXPECT_FALSE(result.success);
   EXPECT_EQ(result.reason, "time limit reached");
 }
@@ -142,8 +144,9 @@ TEST(GridSearch, ANegativeBudgetMeansUnlimited) {
   const int rows = 40, cols = 40;
   const auto map = UniformMap(rows, cols, 1.0);
   depot::GridSearchOptions options;
-  options.time_limit_ms = -1.0;
-  const auto result = depot::GridSearch(map.data(), rows, cols, {0, 0}, {39, 39}, options);
+  options.limits.time_limit_ms = -1.0;
+  const auto result =
+      depot::GridSearch(depot::CostMapView(map.data(), rows, cols), {0, 0}, {39, 39}, options);
   EXPECT_TRUE(result.success);
 }
 

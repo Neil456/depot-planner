@@ -8,6 +8,7 @@ from typing import Any
 import numpy as np
 from scipy.ndimage import distance_transform_edt
 
+from depot_planner import core
 from depot_planner.config import load_config
 
 
@@ -83,16 +84,27 @@ class Grid:
         cost[self.cells == CellType.PARKING] = float(costs["parking"])
         return cost
 
-    def obstacle_distance(self) -> np.ndarray:
+    def obstacle_distance(self, backend: str | None = None) -> np.ndarray:
         """Distance in metres from every cell to the nearest non-drivable cell.
 
         Cells outside the grid are treated as free, which is the conservative
         choice: it never inflates the penalty of a cell near the border more
         than the walls themselves already do.
-        """
-        return distance_transform_edt(self.drivable) * self.resolution
 
-    def proximity_penalty(self) -> np.ndarray:
+        The C++ core computes the exact transform in integer arithmetic, so it
+        agrees with ``scipy.ndimage.distance_transform_edt`` to the last bit on
+        every map that has at least one obstacle. A map with no obstacle at all
+        has no nearest obstacle: the core reports infinity, while scipy returns
+        an artefact of its own algorithm (see docs/DECISIONS.md).
+        """
+        drivable = self.drivable
+        if core.resolve(backend) == "cpp":
+            return core.require().obstacle_distance(
+                np.ascontiguousarray(drivable), self.resolution
+            )
+        return distance_transform_edt(drivable) * self.resolution
+
+    def proximity_penalty(self, backend: str | None = None) -> np.ndarray:
         """Soft extra cost that decays with distance from obstacles."""
         cfg = self.config["obstacle_penalty"]
         penalty = np.zeros(self.shape, dtype=float)
@@ -103,7 +115,7 @@ class Grid:
             return penalty
         weight = float(cfg["weight"])
         exponent = float(cfg["exponent"])
-        dist = self.obstacle_distance()
+        dist = self.obstacle_distance(backend)
         near = (dist > 0.0) & (dist < radius)
         penalty[near] = weight * (1.0 - dist[near] / radius) ** exponent
         return penalty

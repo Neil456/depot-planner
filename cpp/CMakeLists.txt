@@ -18,6 +18,7 @@ option(DEPOT_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitize
 # ----------------------------------------------------------------- the library
 
 add_library(depot_core STATIC
+  src/distance_field.cpp
   src/grid_search.cpp
 )
 target_include_directories(depot_core PUBLIC

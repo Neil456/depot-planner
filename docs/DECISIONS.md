@@ -296,3 +296,43 @@ One line per decision: what was chosen and why.
   generators, so `make cpp-bench` needs no interpreter and every run times the same work.
 - `.clang-format` is Google style at 100 columns, matching the Python side's line length.
   `make format` rewrites in place; `make format-check` is the CI-friendly dry run.
+
+## C++ step 2 — core types, templated search, distance field
+
+- `Grid2D<T>` owns its storage and `GridView<T>` borrows somebody else's (a numpy buffer,
+  or a `Grid2D`). Nothing in the core takes or returns a raw owning pointer: a numpy array
+  is borrowed for the duration of a call, and anything the core produces is returned by
+  value and copied into a fresh array at the binding boundary.
+- **One templated `BestFirstSearch`, three heuristic functors.** `ZeroHeuristic` gives
+  Dijkstra and `OctileHeuristic` gives A* and weighted A*, mirroring the Python module's
+  single `search()` with three wrappers, so the variants cannot drift apart. The Python
+  code reaches Dijkstra by multiplying the octile distance by a zero factor; because the
+  octile distance is always finite and non-negative, `octile * 0.0` is exactly `0.0`, so
+  skipping the distance entirely is numerically identical rather than merely equivalent.
+- The heap comparator keeps the Python tuple order `(f, g, insertion counter)`. `heapq` is
+  a min-heap and `std::priority_queue` a max-heap, but the counter makes the order total,
+  so the two pop the same sequence.
+- **The Euclidean distance transform is exact integer arithmetic.** The first pass reduces
+  each column to the row distance to the nearest obstacle; the second takes the lower
+  envelope of the resulting parabolas (Felzenszwalb-Huttenlocher). The usual formulation
+  evaluates the parabola intersections in floating point; here they are kept as
+  `(numerator, denominator)` pairs and compared by cross-multiplication, so every squared
+  distance is exactly the integer scipy computes and the final square root is the only
+  inexact operation. On 200 random masks the result is bit-identical to
+  `scipy.ndimage.distance_transform_edt`.
+- **One deliberate divergence, pinned by a test.** A mask with no obstacle at all has no
+  nearest obstacle, so the core reports infinity. scipy returns finite distances measured
+  from a point outside the array, which is an artefact of its algorithm rather than an
+  answer. No map in this project is obstacle-free (every depot and every parking lot is
+  walled), and infinity is what the proximity penalty wants anyway: it yields a zero
+  penalty everywhere instead of a phantom one near a corner.
+- `DijkstraField` mirrors the Python `dijkstra_field` down to its heap ordering
+  `(distance, x, y)` and its `1e-12` relaxation epsilon. The epsilon means a marginally
+  cheaper relaxation can be refused, which makes the field in principle order-dependent,
+  so the order is copied rather than improved on.
+- `depot_planner/core.py` is the single place that knows whether the extension exists and
+  what `backend="auto"` means. `grid_astar/backend.py` keeps its own public helpers
+  (`can_use_cpp`, `effective_cost_map`, ...) because the step-1 tests pin them.
+- The C++ core is now the default for the distance field and the Dijkstra field as well as
+  the grid search: `backend="python"` still selects scipy and the pure-Python expansions,
+  and the equivalence tests run both.

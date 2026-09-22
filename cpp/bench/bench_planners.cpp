@@ -19,8 +19,9 @@ void BM_GridDijkstra(benchmark::State& state) {
   depot::GridSearchOptions options;
   options.weight = 0.0;
   for (auto _ : state) {
-    auto result = depot::GridSearch(scenario.cost.data(), scenario.rows, scenario.cols,
-                                    scenario.start, scenario.goal, options);
+    auto result =
+        depot::GridSearch(depot::CostMapView(scenario.cost.data(), scenario.rows, scenario.cols),
+                          scenario.start, scenario.goal, options);
     benchmark::DoNotOptimize(result.cost);
   }
   state.SetLabel("depot 60x40, Dijkstra");
@@ -32,8 +33,9 @@ void BM_GridAstar(benchmark::State& state) {
   depot::GridSearchOptions options;
   options.weight = 1.0;
   for (auto _ : state) {
-    auto result = depot::GridSearch(scenario.cost.data(), scenario.rows, scenario.cols,
-                                    scenario.start, scenario.goal, options);
+    auto result =
+        depot::GridSearch(depot::CostMapView(scenario.cost.data(), scenario.rows, scenario.cols),
+                          scenario.start, scenario.goal, options);
     benchmark::DoNotOptimize(result.cost);
   }
   state.SetLabel("depot 60x40, A*");
@@ -45,8 +47,9 @@ void BM_GridWeightedAstar(benchmark::State& state) {
   depot::GridSearchOptions options;
   options.weight = 1.5;
   for (auto _ : state) {
-    auto result = depot::GridSearch(scenario.cost.data(), scenario.rows, scenario.cols,
-                                    scenario.start, scenario.goal, options);
+    auto result =
+        depot::GridSearch(depot::CostMapView(scenario.cost.data(), scenario.rows, scenario.cols),
+                          scenario.start, scenario.goal, options);
     benchmark::DoNotOptimize(result.cost);
   }
   state.SetLabel("depot 60x40, weighted A* (w=1.5)");

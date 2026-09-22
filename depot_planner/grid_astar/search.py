@@ -25,6 +25,7 @@ from typing import Any, Iterable
 
 import numpy as np
 
+from depot_planner import core
 from depot_planner.config import load_config
 from depot_planner.grid_astar import backend as _backend
 
@@ -280,11 +281,18 @@ def dijkstra_field(
     sources: Iterable[Cell],
     *,
     drivable: np.ndarray | None = None,
+    backend: str | None = None,
 ) -> np.ndarray:
     """Cost-to-come from ``sources`` to every drivable cell (``inf`` elsewhere).
 
-    Used as the obstacle-aware heuristic for hybrid A* in step 5.
+    Used as the obstacle-aware heuristic for hybrid A* in step 5 and for the
+    space-time search's cost-to-go field in step 3. The C++ core mirrors the
+    Python expansion order exactly, so both produce the same field.
     """
+    if core.resolve(backend) == "cpp":
+        return _backend.solve_field(
+            _backend.effective_cost_map(cost_map, drivable), [tuple(s) for s in sources]
+        )
     cost, mask = _validated(cost_map, drivable)
     height, width = cost.shape
     dist = np.full(cost.shape, np.inf, dtype=float)
