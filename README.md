@@ -147,30 +147,6 @@ Two minimal-clearance types in the hard tier, 30 scenarios each:
 
 Nothing was tuned after the hard tier was first run.
 
-## Bugs found by the evaluation harness
-
-Three defects the harness caught that reading the code did not. All are fixed;
-the reasoning is in [docs/DECISIONS.md](docs/DECISIONS.md).
-
-**A 1 cm clip through a parked car.** The first parking battery run aborted: the
-planner returned a path the independent checker rejected. `distance_transform_edt`
-measures centre-to-centre and a lookup snaps the query to its cell, so the
-distance field was reporting up to a full cell diagonal more clearance than
-existed — enough for a plan to shave a parked car's corner. Fixed at the source
-by storing `max(edt - √2, 0) · resolution`, which makes the stored value a true
-lower bound, rather than by loosening the checker.
-
-**The C++ port diverged on paths, not costs.** The C++ core matched the Python
-search's cost on every one of 600 comparisons but returned a different path on 34
-of them. The Python heap pushes `(f, g, counter, cell)`, so ties on `f` break
-towards the smaller `g`; the C++ comparator only had `(f, order)`. A test now
-pins path, cost and expansion count together, which is what caught it.
-
-**Failure frames showing the wrong moment.** The runner handed the collision
-checker a two-step window, so the recorded collision index was always 0 or 1
-instead of a position in the trajectory — every failure image in the report was
-rendering the wrong frame. Found only when the images were first looked at.
-
 ## C++ core
 
 `cpp/grid_astar.cpp` is a C++17 port of the grid search exposed through pybind11,
@@ -214,36 +190,6 @@ cpp/            the optional C++17 core
 configs/        every tunable parameter
 scripts/        one CLI entry point per Makefile target
 tests/          the test suite
-docs/           the original brief, progress log and decision log
+docs/           design notes
 results/        generated; gitignored except results/README_assets/
 ```
-
-[docs/DECISIONS.md](docs/DECISIONS.md) records every judgement call and why.
-[docs/PROGRESS.md](docs/PROGRESS.md) tracks what is done. [docs/TASK.md](docs/TASK.md)
-is the original brief this was built against.
-
-## Limitations
-
-Worth being straight about what these scenarios do and do not model.
-
-- **Other vehicles' trajectories are known exactly and never react.** Each agent
-  follows a timeline fixed before planning starts. That is what makes space-time
-  A\* clean and also what makes it optimistic: no prediction error, no
-  negotiation, no vehicle braking because the ego moved. Real prediction
-  uncertainty would need a different formulation.
-- **The traffic world is a grid.** Until the parking step the ego is a point that
-  moves one cell per step; it has no shape, no heading and no acceleration limit.
-  The grid is 1 m and the timestep 0.25 s, so a "collision" is a cell overlap,
-  not a swept-volume intersection.
-- **The car model is kinematic, not dynamic.** Hybrid A\* respects the steering
-  limit and the wheelbase, but there is no mass, no tyre slip, no jerk limit and
-  no speed profile — the plan is a geometric path, not a trajectory a controller
-  could track directly.
-- **Hybrid A\* is not claimed to be optimal.** Its obstacle-aware grid heuristic
-  is the standard one and is not a proven lower bound in every obstacle layout,
-  and the Reeds-Shepp word set covers the CSC, CCC and SCS families rather than
-  all 48 words.
-- **The hard tier's wall-clock budget is not bit-reproducible.** How much search
-  fits in 50 ms depends on the machine. Re-running it left every
-  success/collision/timeout value identical but moved the per-episode expansion
-  counts; see REPORT.md.
