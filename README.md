@@ -71,8 +71,8 @@ and the [C++ core](#c-core) section below compares the two directly.
 <!-- BEGIN GENERATED: grid_table -->
 | algorithm | backend | cost / optimal | nodes expanded | mean ms |
 | :-- | :-- | :-- | :-- | :-- |
-| Dijkstra | cpp | 1.0000 | 1479 | 0.26 |
-| A* | cpp | 1.0000 | 348 | 0.08 |
+| Dijkstra | cpp | 1.0000 | 1479 | 0.27 |
+| A* | cpp | 1.0000 | 348 | 0.09 |
 | Weighted A* (w=1.5) | cpp | 1.0297 | 96 | 0.03 |
 <!-- END GENERATED: grid_table -->
 
@@ -87,15 +87,15 @@ scenarios.
 <!-- BEGIN GENERATED: spacetime_normal -->
 | scenario | planner | success % | collisions | timeouts | mean waits | mean plan ms |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| empty | spacetime_astar | 100.0 | 0 | 0 | 0.0 | 0.07 |
-| empty | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.05 |
+| empty | spacetime_astar | 100.0 | 0 | 0 | 0.0 | 0.08 |
+| empty | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.06 |
 | crossing | spacetime_astar | 100.0 | 0 | 0 | 2.7 | 0.07 |
 | crossing | baseline_replan | 83.3 | 5 | 0 | 0.2 | 0.05 |
-| head_on | spacetime_astar | 100.0 | 0 | 0 | 1.3 | 0.18 |
-| head_on | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.06 |
+| head_on | spacetime_astar | 100.0 | 0 | 0 | 1.3 | 0.19 |
+| head_on | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.07 |
 | blocked_then_clears | spacetime_astar | 100.0 | 0 | 0 | 9.6 | 0.14 |
 | blocked_then_clears | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.05 |
-| congested | spacetime_astar | 100.0 | 0 | 0 | 9.4 | 0.42 |
+| congested | spacetime_astar | 100.0 | 0 | 0 | 9.4 | 0.41 |
 | congested | baseline_replan | 93.3 | 2 | 0 | 1.8 | 0.08 |
 <!-- END GENERATED: spacetime_normal -->
 
@@ -110,9 +110,9 @@ Running on the C++ core:
 <!-- BEGIN GENERATED: spacetime_hard -->
 | scenario | planner | success % | collisions | timeouts | mean waits | mean plan ms |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| congested_hard | spacetime_astar | 100.0 | 0 | 0 | 15.3 | 3.11 |
+| congested_hard | spacetime_astar | 100.0 | 0 | 0 | 15.3 | 3.21 |
 | congested_hard | baseline_replan | 66.7 | 10 | 0 | 6.3 | 0.09 |
-| head_on_narrow | spacetime_astar | 100.0 | 0 | 0 | 3.1 | 0.52 |
+| head_on_narrow | spacetime_astar | 100.0 | 0 | 0 | 3.1 | 0.53 |
 | head_on_narrow | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.07 |
 <!-- END GENERATED: spacetime_hard -->
 
@@ -140,10 +140,10 @@ re-verified by the independent exact-rectangle checker.
 <!-- BEGIN GENERATED: parking_normal -->
 | parking type | success % | mean plan ms | nodes expanded | direction switches |
 | :-- | :-- | :-- | :-- | :-- |
-| perpendicular_forward | 100.0 | 7.4 | 1448 | 1.10 |
-| perpendicular_reverse | 100.0 | 3.3 | 623 | 0.73 |
-| parallel | 100.0 | 34.8 | 6372 | 2.83 |
-| tight | 100.0 | 19.5 | 3973 | 2.47 |
+| perpendicular_forward | 100.0 | 7.6 | 1448 | 1.10 |
+| perpendicular_reverse | 100.0 | 3.4 | 623 | 0.73 |
+| parallel | 100.0 | 34.9 | 6372 | 2.83 |
+| tight | 100.0 | 19.9 | 3973 | 2.47 |
 <!-- END GENERATED: parking_normal -->
 
 Two minimal-clearance types in the hard tier, 30 scenarios each:
@@ -151,8 +151,8 @@ Two minimal-clearance types in the hard tier, 30 scenarios each:
 <!-- BEGIN GENERATED: parking_hard -->
 | parking type | success % | mean plan ms | nodes expanded | direction switches |
 | :-- | :-- | :-- | :-- | :-- |
-| parallel_minimal | 33.3 | 19.5 | 4029 | 1.50 |
-| perpendicular_minimal | 96.7 | 5.6 | 1092 | 0.72 |
+| parallel_minimal | 33.3 | 20.3 | 4029 | 1.50 |
+| perpendicular_minimal | 96.7 | 5.5 | 1092 | 0.72 |
 <!-- END GENERATED: parking_hard -->
 
 <!-- BEGIN GENERATED: finding_gaps -->
@@ -227,6 +227,13 @@ and the separating-axis test rather than the planner's discs. Neither shares a
 line with any planner, and both caught real bugs. Moving them next to the code
 they audit would quietly weaken that.
 
+**Why the closed-loop runner is opt-in.** The episode loop exists in C++ too
+(`--engine cpp`), and produces identical episodes, but the Python loop is the
+default: it hands every executed step to the independent checker *as the
+episode runs*, so an illegal step stops the episode the moment it happens. The
+C++ loop is 1.6x faster, which is not worth trading that for — once the planners
+are in C++, the loop is no longer where the time goes.
+
 **Getting "identical" to mean identical.** Three CPython-specific numerics had
 to be reimplemented rather than assumed. `math.hypot` is not the platform
 `hypot` — CPython has its own correctly-rounded norm, and over 200k random pairs
@@ -243,11 +250,11 @@ prepared inputs with scenario setup excluded from the clock.
 <!-- BEGIN GENERATED: cpp_table -->
 | planner | cases | Python ms | C++ ms | speedup | identical plans |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| grid A* (Dijkstra) | 40 | 9.0459 | 0.2947 | 30.4 | yes |
-| grid A* | 40 | 1.7967 | 0.0864 | 22.5 | yes |
-| grid A* (weighted, w=1.5) | 40 | 0.5276 | 0.0480 | 11.6 | yes |
-| space-time A* | 10 | 35.5036 | 0.8480 | 41.0 | yes |
-| hybrid A* | 8 | 212.9811 | 8.1482 | 25.0 | yes |
+| grid A* (Dijkstra) | 40 | 8.8740 | 0.2746 | 31.0 | yes |
+| grid A* | 40 | 1.8072 | 0.0839 | 21.0 | yes |
+| grid A* (weighted, w=1.5) | 40 | 0.5335 | 0.0456 | 11.6 | yes |
+| space-time A* | 10 | 34.7553 | 0.8101 | 41.8 | yes |
+| hybrid A* | 8 | 208.8453 | 7.5659 | 25.0 | yes |
 <!-- END GENERATED: cpp_table -->
 
 ## Quickstart
@@ -278,7 +285,8 @@ python3 scripts/check_equivalence.py              # compare them on every seed
 python3 scripts/bench_cpp.py                      # regenerate the table above
 ```
 
-Individual stages: `make step1`, `make battery`, `make gifs`, `make report`.
+Individual stages: `make step1`, `make battery`, `make gifs`, `make report`,
+`make equivalence`.
 Every tunable number — costs, penalties, resolutions, limits, scenario
 parameters — lives in `configs/*.yaml`, never in the code.
 

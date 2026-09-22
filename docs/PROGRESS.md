@@ -40,7 +40,9 @@ follow-up C++ port in [`TASK_CPP.md`](TASK_CPP.md).
       `head_on_narrow` with a 50 ms per-replan budget; `parallel_minimal`,
       `perpendicular_minimal` with minimum-clearance gaps and a 5000-expansion cap.
       30 episodes per type, nothing tuned afterwards.
-- [x] **CI** — `.github/workflows/tests.yml` runs `pytest -q` on push.
+- [x] **CI** — `.github/workflows/tests.yml` runs `pytest -q` on push. *(Extended by the
+      C++ port below into three jobs: the Python suite, the C++ suite with
+      `clang-format --Werror` and ctest, and a sanitizer job.)*
 - [x] **Public-repo polish** — hero and side-by-side GIFs, README rewritten with
       generated tables, MIT licence, dead code removed, docstrings completed, project
       docs moved into `docs/`. No planner behaviour or recorded result changed.
@@ -133,7 +135,8 @@ make cpp-test   # configure, build and ctest the C++ core (fetches GoogleTest)
 make cpp-bench  # the Google Benchmark suite
 make format     # clang-format the C++ sources in place
 make step1      # results/step1/compare.png
-make battery    # both tiers of both batteries
+make battery    # both tiers of both batteries (BACKEND=python / ENGINE=cpp to switch)
+make equivalence # compare the C++ core against the Python reference on every seed
 make gifs       # every GIF and demo figure, including the README showcase
 make report     # regenerates REPORT.md and the README's generated tables
 make all        # setup, tests, batteries, GIFs and the report, in order
@@ -142,6 +145,15 @@ make all        # setup, tests, batteries, GIFs and the report, in order
 Run the suite with `make test` (= `python3 -m pytest -q`); see `DECISIONS.md` for why the
 bare `pytest` binary on this image is the wrong interpreter.
 
+Both implementations are reachable from the command line:
+
+```
+python3 scripts/run_battery.py --backend python   # the reference planners
+python3 scripts/run_battery.py --engine cpp       # the closed loop in C++ too
+python3 scripts/check_equivalence.py              # compare them on every seed
+python3 scripts/bench_cpp.py                      # regenerate the Python-vs-C++ table
+```
+
 ## Measured timings on this machine
 
 All planners run on the C++ core; the Python reference column is what the same work costs
@@ -149,8 +161,8 @@ on `--backend python`.
 
 | stage | C++ core | Python reference |
 | --- | --- | --- |
-| `make test` (219 tests, exercises both backends) | 84 s | — |
-| `make cpp-test` (59 GoogleTest cases, after the first configure) | 2 s | — |
+| `make test` (236 tests, exercises both backends) | 88 s | — |
+| `make cpp-test` (68 GoogleTest cases) | 31 s cold, 2 s warm | — |
 | space-time battery, normal tier (300 episodes) | 6 s | 30 s |
 | space-time battery, hard tier (120 episodes) | 23 s | 267 s |
 | parking battery, normal tier (120 scenarios) | 12 s | 60 s |
@@ -158,8 +170,9 @@ on `--backend python`.
 | demo figures + space-time GIFs (10) | 25 s | — |
 | parking GIFs (4) + showcase GIFs (2) | 63 s | — |
 | `make report` (incl. re-running 38 failures) | 29 s | — |
+| `make equivalence` (2480 comparisons) | 230 s | — |
 
-`make all` now runs in roughly 4 minutes, against about 12 before the port.
+`make all` now runs in 288 s end to end, against about 12 minutes before the port.
 
 ## Headline numbers
 

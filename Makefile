@@ -4,7 +4,7 @@ CMAKE ?= cmake
 CTEST ?= ctest
 CLANG_FORMAT ?= clang-format
 
-.PHONY: setup test step1 battery gifs report all clean \
+.PHONY: setup test step1 battery equivalence gifs report all clean \
         cpp-configure cpp-build cpp-test cpp-bench format format-check
 
 setup:
@@ -16,9 +16,14 @@ test:
 step1:
 	$(PYTHON) scripts/demo_grid.py
 
+# BACKEND selects the planner implementation and ENGINE the closed-loop runner;
+# both default to the C++ core and the Python loop respectively.
 battery:
-	$(PYTHON) scripts/run_battery.py
-	$(PYTHON) scripts/run_parking_battery.py
+	$(PYTHON) scripts/run_battery.py $(if $(BACKEND),--backend $(BACKEND)) $(if $(ENGINE),--engine $(ENGINE))
+	$(PYTHON) scripts/run_parking_battery.py $(if $(BACKEND),--backend $(BACKEND))
+
+equivalence:
+	$(PYTHON) scripts/check_equivalence.py
 
 gifs:
 	$(PYTHON) scripts/demo_scenarios.py
