@@ -80,3 +80,27 @@ One line per decision: what was chosen and why.
 - `sim/collision.py` (the independent checker) was written during step 3 rather than step 4,
   because step 3's own check requires it. It shares no code with the planners and uses the
   true footprints, with no safety margin.
+
+## Step 4 — closed-loop simulator and battery
+
+- Collisions are detected during the episode, not afterwards: each executed step is passed
+  to the independent checker, and the episode stops on the first violation. The whole
+  trajectory is re-checked afterwards, and the battery raises if a planner reported success
+  on a trajectory the checker rejects.
+- `success`, `collision` and `timeout` are mutually exclusive by construction, so
+  "successful episodes have zero collisions" is enforced rather than merely observed.
+- `time_to_goal_s` is NaN for failed episodes, so a mean over failures is never silently
+  reported as a fast run.
+- The space-time planner's horizon is clamped to the scenario's own time limit. Planning
+  past the end of the episode cannot help, and searching that far is exactly what made a
+  hopeless replan (an agent parked on the goal) cost seconds per step. `max_nodes` was
+  cut from 400k to 120k for the same reason; no plan in the battery hits either cap.
+- When a planner returns no plan the ego holds position and retries next step, and the
+  episode counts a `plan_failure`. Aborting instead would hide the difference between
+  "temporarily boxed in" and "genuinely stuck".
+- Planner-derived data (cost map, Dijkstra heuristic field) is cached per scenario for the
+  duration of an episode, keyed on the scenario object itself rather than `id()`, so a
+  recycled address cannot serve a stale cost map.
+- GIFs pick one seed per scenario type and render *both* planners on it, so the two
+  animations show the same traffic. The seed is chosen by the battery slice: prefer a seed
+  where the baseline fails, then the one where space-time A* waits most.

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -58,19 +58,24 @@ class Planner:
 
     def __init__(self, config: dict[str, Any] | None = None) -> None:
         self.config = config if config is not None else load_config("spacetime")
-        self._cache: dict[int, _ScenarioCache] = {}
+        self._cached_for: Any = None
+        self._cache: _ScenarioCache | None = None
 
     def prepare(self, scenario) -> _ScenarioCache:
-        key = id(scenario)
-        cached = self._cache.get(key)
-        if cached is None:
+        """Per-scenario derived data, kept across the replans of one episode.
+
+        The cache is keyed on object identity and holds a reference to the
+        scenario, so a recycled ``id()`` can never serve a stale cost map.
+        """
+        if self._cache is None or self._cached_for is not scenario:
             grid: Grid = scenario.grid
-            cached = _ScenarioCache(grid.cost_map(), grid.drivable, grid.min_cell_cost())
-            self._cache[key] = cached
-        return cached
+            self._cache = _ScenarioCache(grid.cost_map(), grid.drivable, grid.min_cell_cost())
+            self._cached_for = scenario
+        return self._cache
 
     def reset(self) -> None:
-        self._cache.clear()
+        self._cache = None
+        self._cached_for = None
 
     def plan(self, scenario, cell: Cell, t: int) -> PlanResult:  # pragma: no cover - interface
         raise NotImplementedError
@@ -91,10 +96,13 @@ class SpaceTimePlanner(Planner):
 
     def plan(self, scenario, cell: Cell, t: int) -> PlanResult:
         cached = self.prepare(scenario)
+        # Planning past the episode's own time limit cannot help, and searching that
+        # far is what makes a hopeless replan expensive.
+        horizon = min(int(self.config["spacetime"]["max_time_horizon"]), int(scenario.time_limit))
         result = st.plan(
             cached.cost_map, cached.drivable, cell, scenario.goal, scenario.agents,
             start_time=t, min_cell_cost=cached.min_cell_cost, config=self.config,
-            collect_expanded=False, heuristic_field=cached.goal_field,
+            collect_expanded=False, heuristic_field=cached.goal_field, max_time=horizon,
         )
         if not result.success:
             return PlanResult(False, [cell], [t], math.inf, result.nodes_expanded,
