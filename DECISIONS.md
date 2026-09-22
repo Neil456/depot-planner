@@ -24,3 +24,25 @@ One line per decision: what was chosen and why.
 - `make test` runs `python3 -m pytest -q` rather than bare `pytest`: this image has a
   standalone `uv`-installed `pytest` earlier on `PATH` that cannot see the project's
   numpy. `python3 -m pytest -q` is the same run against the right interpreter.
+
+## Step 2 — scenarios with moving vehicles
+
+- Agents are 2x2-cell rectangles anchored at their lower-index corner: a 4 m aisle and a
+  3 m cross aisle both take one, so traffic can use the whole aisle network.
+- Agent routes are planned only over anchors whose entire footprint lands on **aisle**
+  cells, which keeps other vehicles driving in the lanes instead of across parking bands.
+- Ego start and goal are single aisle cells at least 30 m apart; the ego is a point on the
+  grid until step 5 gives it a car shape.
+- The `crossing` and `head_on` agents run with zero pause probability so their meeting with
+  the ego happens at a computed step rather than by luck; `blocked_then_clears` and
+  `congested` traffic pauses with probability 0.12 to look less mechanical.
+- `blocked_then_clears` releases its blocker `5..40` steps **after the step the ego would
+  naturally arrive**, not after t=0. Measured from t=0 the blocker was sometimes gone
+  before the ego reached it, which made the scenario a no-op in 1 of 20 instances.
+- Agent conflicts are rejected, not repaired: a candidate agent that overlaps a wall or an
+  already-placed agent (including a swap through each other) is resampled.
+- "Solvable in principle" is checked by marking every agent's **final resting** footprint,
+  inflated by 1 cell, as an obstacle and running step-1 A* from start to goal. This is
+  stronger than checking the empty map: it rules out a blocker that parks in the only gap.
+- A failed generation raises `ScenarioGenerationError` after a bounded attempt budget
+  rather than looping forever.
