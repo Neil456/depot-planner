@@ -25,12 +25,18 @@ import pandas as pd
 
 from depot_planner.config import REPO_ROOT, load_config, results_path
 from depot_planner.eval import report as report_helpers
-from depot_planner.eval.battery import BATTERY_CSV, HARD_BATTERY_CSV, tier_planner_config
+from depot_planner.eval.battery import (
+    BATTERY_CSV,
+    HARD_BATTERY_CSV,
+    tier_csv,
+    tier_planner_config,
+)
 from depot_planner.eval.cpp_bench import CPP_CSV, summarise_cpp
 from depot_planner.eval.grid_bench import GRID_CSV, run_grid_benchmark, summarise_grid, write_grid_benchmark
 from depot_planner.eval.parking_battery import (
     HARD_PARKING_CSV,
     PARKING_CSV,
+    parking_tier_csv,
     summarise_parking,
     tier_hybrid_config,
 )
@@ -69,8 +75,14 @@ def load_frames() -> dict[str, pd.DataFrame]:
 
     read = report_helpers.read_csv
     cpp_path = results_path(CPP_CSV)
+    python_hard = results_path(tier_csv("hard", "python"))
+    python_parking_hard = results_path(parking_tier_csv("hard", "python"))
     return {
         "cpp": pd.read_csv(cpp_path) if cpp_path.is_file() else None,
+        "spacetime_hard_python": pd.read_csv(python_hard) if python_hard.is_file() else None,
+        "parking_hard_python": (
+            pd.read_csv(python_parking_hard) if python_parking_hard.is_file() else None
+        ),
         "grid": read(results_path(GRID_CSV), "the step-1 benchmark"),
         "spacetime_normal": read(results_path(BATTERY_CSV), "the space-time battery"),
         "spacetime_hard": read(results_path(HARD_BATTERY_CSV), "the hard space-time battery"),
@@ -127,6 +139,70 @@ def cpp_section(frame: pd.DataFrame | None) -> list[str]:
         table,
         "",
         "The two backends return the same path on every pair, not merely the same cost.",
+        "",
+    ]
+
+
+def hard_backend_section(frames: dict[str, pd.DataFrame]) -> list[str]:
+    """The hard tier on both backends, side by side.
+
+    The hard tier is the one place where the planner's *runtime* changes its
+    *results*, because its budget is wall clock. Reporting only the fast backend
+    would quietly drop the most interesting number in the project.
+    """
+    python_frame = frames.get("spacetime_hard_python")
+    if python_frame is None or python_frame.empty:
+        return [
+            "The same tier on the Python reference was not run here. "
+            "`python3 scripts/run_battery.py --tier hard --backend python` produces it.",
+            "",
+        ]
+
+    from depot_planner.eval.battery import summarise
+
+    fast = summarise(frames["spacetime_hard"]).set_index(["scenario", "planner"])
+    slow = summarise(python_frame).set_index(["scenario", "planner"])
+    rows = []
+    for key in fast.index:
+        if key not in slow.index:
+            continue
+        scenario, planner = key
+        rows.append({
+            "scenario": scenario,
+            "planner": planner,
+            "cpp_success": fast.loc[key, "success_pct"],
+            "python_success": slow.loc[key, "success_pct"],
+            "cpp_timeouts": fast.loc[key, "timeouts"],
+            "python_timeouts": slow.loc[key, "timeouts"],
+            "cpp_ms": fast.loc[key, "mean_planning_ms"],
+            "python_ms": slow.loc[key, "mean_planning_ms"],
+        })
+    comparison = report_helpers.markdown_table(pd.DataFrame(rows), [
+        ("scenario", "scenario", ""),
+        ("planner", "planner", ""),
+        ("cpp_success", "success % (C++)", ".1f"),
+        ("python_success", "success % (Python)", ".1f"),
+        ("cpp_timeouts", "timeouts (C++)", ".0f"),
+        ("python_timeouts", "timeouts (Python)", ".0f"),
+        ("cpp_ms", "mean plan ms (C++)", ".2f"),
+        ("python_ms", "mean plan ms (Python)", ".2f"),
+    ])
+    return [
+        "#### The same hard tier on the Python reference",
+        "",
+        "The hard tier's budget is wall clock, so this is the one place in the project "
+        "where the *implementation* changes the *result*. Same scenario types, same seeds, "
+        "same 50 ms budget, the reference planner instead of the core:",
+        "",
+        spacetime_table(python_frame),
+        "",
+        "Side by side:",
+        "",
+        comparison,
+        "",
+        "The baseline is cheap enough that the budget never binds for it, so its rows barely "
+        "move. Space-time A* is where the budget bit: on the reference it spends its whole "
+        "50 ms, returns no plan, and the ego holds position until the episode times out.",
         "",
     ]
 
@@ -302,8 +378,11 @@ def failure_section(frames: dict[str, pd.DataFrame]) -> str:
         planner_config = tier_planner_config(tier)
         if planner_config is not None:
             budget = planner_config["spacetime"]["time_limit_ms"]
+        backend = str(row["backend"]) if "backend" in row else None
         scenario = generate_scenario(str(row["scenario"]), int(row["seed"]))
-        episode = run_episode(scenario, make_planner(str(row["planner"]), planner_config))
+        episode = run_episode(
+            scenario, make_planner(str(row["planner"]), planner_config, backend)
+        )
         # A hard-tier budget is wall clock, so a borderline episode can come out
         # differently on the re-run. Say so rather than quietly reporting the re-run.
         disagreed = episode.success
@@ -332,7 +411,9 @@ def failure_section(frames: dict[str, pd.DataFrame]) -> str:
         scenario = generate_parking_scenario(
             str(row["parking_type"]), int(row["seed"]), hybrid_config=hybrid_cfg
         )
-        result = plan_for_scenario(scenario)
+        result = plan_for_scenario(
+            scenario, backend=str(row["backend"]) if "backend" in row else None
+        )
         png = save_plan_png(
             scenario, result,
             FIGURES / f"failure_{tier}_{row['parking_type']}_seed{row['seed']}.png",
@@ -401,8 +482,8 @@ def build_report(frames: dict[str, pd.DataFrame]) -> str:
         "",
         f"{grid['pair'].nunique()} random start/goal pairs on one depot map "
         f"(`configs/eval.yaml: grid_benchmark`), all three algorithms on every pair. These "
-        f"runs use whichever backend is the default here — the `backend` column says which — "
-        f"so compare the timings against section 7 rather than across sections.",
+        f"runs use the default backend — the `backend` column says which — so read the "
+        f"timings here alongside the head-to-head in section 7.",
         "",
         grid_table(grid),
         "",
@@ -416,7 +497,9 @@ def build_report(frames: dict[str, pd.DataFrame]) -> str:
         "",
         "### Normal tier",
         "",
-        "Five scenario types, 30 episodes each, both planners on the same seeded scenarios. "
+        f"Five scenario types, 30 episodes each, both planners on the same seeded scenarios, "
+        f"planned by the "
+        f"{report_helpers.backend_of(frames['spacetime_normal'])} backend. "
         "Space-time A* replans every 4 steps; the baseline replans every step and treats the "
         "agents as static obstacles where they currently are.",
         "",
@@ -434,6 +517,7 @@ def build_report(frames: dict[str, pd.DataFrame]) -> str:
         "",
         spacetime_table(frames["spacetime_hard"]),
         "",
+        *hard_backend_section(frames),
         f"![planning time distribution]({rel(time_png)})",
         "",
         "## 3. Hybrid A* parking",
@@ -460,17 +544,21 @@ def build_report(frames: dict[str, pd.DataFrame]) -> str:
         "",
         failure_section(frames),
         "",
-        "## 5. Reproducibility",
+        "## 5. Reproducibility and the two backends",
         "",
         "Scenario generation, both planners and hybrid A* are deterministic given a seed, and "
-        "the normal tiers reproduce exactly run to run.",
+        "the normal tiers reproduce exactly run to run — on either backend. The C++ core and "
+        "the Python reference are verified to agree exactly, not approximately: "
+        "`scripts/check_equivalence.py` compares them on every battery seed of both tiers and "
+        "reports identical plans, costs and expansion counts, with every C++ parking plan also "
+        "passing the independent exact-rectangle checker.",
         "",
-        "The **hard space-time tier does not**, by construction: its 50 ms budget is wall clock, "
-        "so how much search fits inside it depends on the machine. Re-running it on the same "
-        "machine after the C++ core was added left every `success`, `collision` and `timeout` "
-        "value identical, but `nodes_expanded` moved on 40 of 120 episodes and `steps` on 3 "
-        "(by at most 7). Treat the hard-tier aggregates as stable and its per-episode search "
-        "effort as a snapshot.",
+        "The **hard space-time tier is the exception**, by construction: its 50 ms budget is "
+        "wall clock, so how much search fits inside it depends on how fast the planner runs "
+        "and on the machine it runs on. That is not a defect of the comparison, it is the "
+        "point of it — and it is why section 2 reports that tier on both backends. Treat its "
+        "aggregates as a property of this machine and this implementation rather than of the "
+        "algorithm alone.",
         "",
         "## 6. What this report does not claim",
         "",
@@ -481,8 +569,11 @@ def build_report(frames: dict[str, pd.DataFrame]) -> str:
         "optimum.",
         "- Timings are wall clock on one machine; treat them as orders of magnitude, not "
         "benchmarks.",
-        "- The Python and C++ searches are verified to agree on path and cost, which says "
-        "nothing about either being the fastest possible implementation.",
+        "- The C++ core and the Python reference are verified to produce the same plans, "
+        "which says nothing about either being the fastest possible implementation. The "
+        "speed-ups in section 7 are what this port achieved, not an upper bound.",
+        "- The hard tier's success rates depend on how fast the planner runs on *this* "
+        "machine, because its budget is wall clock. A slower machine would move them.",
         "",
         *cpp_section(frames.get("cpp")),
     ]

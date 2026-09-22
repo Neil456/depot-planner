@@ -67,3 +67,11 @@ def combine_tiers(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
             part["tier"] = tier
         parts.append(part)
     return pd.concat(parts, ignore_index=True)
+
+
+def backend_of(frame: pd.DataFrame) -> str:
+    """Which backend produced a battery CSV, for the report's prose."""
+    if "backend" not in frame.columns:
+        return "default"
+    names = sorted(set(frame["backend"].astype(str)))
+    return " and ".join(names) if names else "default"

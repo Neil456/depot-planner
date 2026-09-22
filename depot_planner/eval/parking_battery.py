@@ -39,9 +39,16 @@ def tier_hybrid_config(tier: str, config: dict[str, Any] | None = None) -> dict[
     return deep_merge(base, {"limits": {"max_expansions": int(cap)}})
 
 
-def parking_tier_csv(tier: str) -> str:
-    """Name of the CSV this tier writes."""
-    return PARKING_CSV if tier == "normal" else HARD_PARKING_CSV
+def parking_tier_csv(tier: str, backend: str | None = None) -> str:
+    """Name of the CSV this tier writes.
+
+    The C++ backend is the default and writes the canonical file; a run on the
+    Python reference writes alongside it, so the two can be reported together.
+    """
+    name = PARKING_CSV if tier == "normal" else HARD_PARKING_CSV
+    if core.resolve(backend) == "python":
+        return name.replace(".csv", "_python.csv")
+    return name
 
 
 def episode_row(scenario, result: HybridResult, verified: bool, detail: str,

@@ -15,7 +15,7 @@ import pandas as pd
 
 from depot_planner.config import REPO_ROOT, load_config, results_path
 from depot_planner.eval import report as helpers
-from depot_planner.eval.battery import BATTERY_CSV, HARD_BATTERY_CSV, summarise
+from depot_planner.eval.battery import BATTERY_CSV, HARD_BATTERY_CSV, tier_csv, summarise
 from depot_planner.eval.cpp_bench import CPP_CSV, summarise_cpp
 from depot_planner.eval.grid_bench import GRID_CSV, summarise_grid
 from depot_planner.eval.parking_battery import HARD_PARKING_CSV, PARKING_CSV, summarise_parking
@@ -31,6 +31,7 @@ REGION_NAMES: tuple[str, ...] = (
     "grid_table",
     "spacetime_normal",
     "spacetime_hard",
+    "spacetime_hard_python",
     "finding_budget",
     "parking_normal",
     "parking_hard",
@@ -96,9 +97,8 @@ def _plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
-def _finding_budget(hard: pd.DataFrame) -> str:
-    """The hard-tier budget finding, worded from the numbers rather than around them."""
-    budget = float(load_config("eval")["hard_battery"]["planning_time_limit_ms"])
+def _one_sided_budget_finding(hard: pd.DataFrame, budget: float) -> str:
+    """The finding when only one backend's hard tier is on disk."""
     narrow_timed = _pct(hard, "head_on_narrow", "spacetime_astar")
     narrow_base = _pct(hard, "head_on_narrow", "baseline_replan")
     _, narrow_timeouts = _counts(hard, "head_on_narrow", "spacetime_astar")
@@ -107,10 +107,12 @@ def _finding_budget(hard: pd.DataFrame) -> str:
     timed_coll, timed_to = _counts(hard, "congested_hard", "spacetime_astar")
     base_coll, base_to = _counts(hard, "congested_hard", "baseline_replan")
 
-    lead = (
-        "the cheap planner wins in narrow aisles" if narrow_base > narrow_timed
-        else "the two planners separate"
-    )
+    if narrow_base > narrow_timed:
+        lead = "the cheap planner wins in narrow aisles"
+    elif narrow_timed > narrow_base:
+        lead = "space-time A* wins in narrow aisles"
+    else:
+        lead = "the two planners are level in narrow aisles"
     if congested_timed > congested_base:
         congested_verdict = "space-time A* comes out ahead"
     elif congested_timed < congested_base:
@@ -119,16 +121,63 @@ def _finding_budget(hard: pd.DataFrame) -> str:
         congested_verdict = "the two tie on success rate"
     return (
         f"**Under a {budget:.0f} ms budget per replan, {lead}.** On `head_on_narrow` the "
-        f"replanning baseline reaches the goal in {narrow_base:.1f}% of episodes while "
-        f"space-time A* manages {narrow_timed:.1f}%, losing {narrow_timeouts} of them to "
-        f"timeouts: the space-time search does not fit in the budget, returns no plan, and the "
-        f"ego stalls in the aisle. On `congested_hard` {congested_verdict} "
-        f"({congested_timed:.1f}% against {congested_base:.1f}%), but they fail in opposite "
-        f"ways — space-time A* loses {_plural(timed_to, 'episode')} to timeouts and "
-        f"{_plural(timed_coll, 'episode')} to a collision, the baseline "
+        f"replanning baseline reaches the goal in {narrow_base:.1f}% of episodes and "
+        f"space-time A* in {narrow_timed:.1f}%, the latter losing "
+        f"{_plural(narrow_timeouts, 'episode')} to timeouts. On `congested_hard` "
+        f"{congested_verdict} ({congested_timed:.1f}% against {congested_base:.1f}%), and they "
+        f"fail in different ways — space-time A* loses {_plural(timed_to, 'episode')} to "
+        f"timeouts and {_plural(timed_coll, 'episode')} to a collision, the baseline "
         f"{_plural(base_coll, 'episode')} to collisions and {_plural(base_to, 'episode')} to "
         f"timeouts. A planner that cannot answer inside the control loop is not safe, it is "
         f"just differently unsafe."
+    )
+
+
+def _finding_budget(hard: pd.DataFrame, hard_python: pd.DataFrame | None = None) -> str:
+    """The hard-tier budget finding, worded from the numbers rather than around them.
+
+    When both backends' hard tiers are on disk the finding is about the gap
+    between them: same planner, same budget, same seeds, different runtime.
+    """
+    budget = float(load_config("eval")["hard_battery"]["planning_time_limit_ms"])
+    if hard_python is None:
+        return _one_sided_budget_finding(hard, budget)
+
+    types = ("congested_hard", "head_on_narrow")
+    fast = {name: _pct(hard, name, "spacetime_astar") for name in types}
+    slow = {name: _pct(hard_python, name, "spacetime_astar") for name in types}
+    slow_timeouts = {name: _counts(hard_python, name, "spacetime_astar")[1] for name in types}
+    base = {name: _pct(hard, name, "baseline_replan") for name in types}
+    base_collisions = {name: _counts(hard, name, "baseline_replan")[0] for name in types}
+
+    gained = [name for name in types if fast[name] > slow[name] + 1e-9]
+    lost = [name for name in types if fast[name] < slow[name] - 1e-9]
+    if gained and not lost:
+        headline = "the implementation decides the outcome"
+    elif lost and not gained:
+        headline = "the faster implementation does not help"
+    elif gained and lost:
+        headline = "the two implementations trade places"
+    else:
+        headline = "the implementation makes no difference"
+
+    scores = " and ".join(f"{fast[name]:.1f}% of `{name}` episodes" for name in types)
+    reference = " and ".join(
+        f"{slow[name]:.1f}% of `{name}` with {_plural(slow_timeouts[name], 'timeout')}"
+        for name in types
+    )
+    worst_base = min(types, key=lambda name: base[name])
+    return (
+        f"**Under a {budget:.0f} ms budget per replan, {headline}.** Space-time A\\* on the C++ "
+        f"core reaches the goal in {scores}. The same planner on the Python reference, with the "
+        f"same budget and the same seeds, manages {reference}: the search does not fit in the "
+        f"budget, returns no plan, and the ego stalls in the aisle until the episode times out. "
+        f"The replanning baseline is cheap enough either way and is unmoved at "
+        f"{base['congested_hard']:.1f}% and {base['head_on_narrow']:.1f}%, but on "
+        f"`{worst_base}` it fails by driving into vehicles "
+        f"({_plural(base_collisions[worst_base], 'collision')}) rather than by running out of "
+        f"time. Optimality is worthless if it does not fit in the control loop — and here "
+        f"making it fit was an implementation problem, not an algorithmic one."
     )
 
 
@@ -160,14 +209,23 @@ def build_regions() -> dict[str, str]:
     parking_normal = read(results_path(PARKING_CSV), "the parking battery")
     parking_hard = read(results_path(HARD_PARKING_CSV), "the hard parking battery")
     cpp_path = results_path(CPP_CSV)
+    python_hard_path = results_path(tier_csv("hard", "python"))
+    spacetime_hard_python = (
+        pd.read_csv(python_hard_path) if python_hard_path.is_file() else None
+    )
 
     regions = {
         "grid_table": _grid_table(grid),
         "spacetime_normal": _spacetime_table(spacetime_normal),
         "spacetime_hard": _spacetime_table(spacetime_hard),
+        "spacetime_hard_python": (
+            _spacetime_table(spacetime_hard_python) if spacetime_hard_python is not None
+            else "_Not run. `python3 scripts/run_battery.py --tier hard --backend python` "
+                 "fills this table._"
+        ),
         "parking_normal": _parking_table(parking_normal),
         "parking_hard": _parking_table(parking_hard),
-        "finding_budget": _finding_budget(spacetime_hard),
+        "finding_budget": _finding_budget(spacetime_hard, spacetime_hard_python),
         "finding_gaps": _finding_gaps(parking_hard),
     }
     if cpp_path.is_file():

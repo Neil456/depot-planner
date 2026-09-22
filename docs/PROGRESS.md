@@ -87,7 +87,13 @@ orchestration, the independent collision checkers, plotting and reports.
       scenarios of both tiers on both backends: identical success, cost, expansion counts,
       collision-check counts and pose sequences, and every C++ plan passes the Python
       independent rectangle checker. 20-45x faster.
-- [ ] C++ step 5: pipeline defaults to the C++ backend; batteries and REPORT.md rerun
+- [x] **C++ step 5: the pipeline runs on C++ by default** — done. Every planner resolves to
+      the core unless told otherwise, and `--backend python` on both battery scripts runs the
+      reference. All four battery tiers were rerun on both backends and `REPORT.md` and
+      `README.md` regenerated. **The hard tier's headline result inverted**: under the same
+      50 ms budget, space-time A* went from 66.7%/53.3% on the reference to 100%/100% on the
+      core, because the search now fits in the budget. Both backends are reported side by
+      side in REPORT.md section 2 and README.md.
 - [ ] C++ step 6: Google Benchmark suite, Python-vs-C++ table, sanitizer CI
 - [ ] C++ step 7 (optional): closed-loop runner in C++
 - [ ] C++ step 8: README architecture and build documentation
@@ -112,18 +118,22 @@ bare `pytest` binary on this image is the wrong interpreter.
 
 ## Measured timings on this machine
 
-| stage | wall clock |
-| --- | --- |
-| `make test` (159 tests) | 84 s |
-| space-time battery, normal tier (300 episodes) | 25 s |
-| space-time battery, hard tier (120 episodes) | 261 s |
-| parking battery, normal tier (120 scenarios) | 58 s |
-| parking battery, hard tier (60 scenarios) | 23 s |
-| space-time GIFs (10) | 31 s |
-| parking GIFs (4) | 39 s |
-| `make report` (incl. re-running 62 failures) | ~170 s |
+All planners run on the C++ core; the Python reference column is what the same work costs
+on `--backend python`.
 
-`make all` therefore runs in roughly 12 minutes, inside the 30-minute budget.
+| stage | C++ core | Python reference |
+| --- | --- | --- |
+| `make test` (219 tests, exercises both backends) | 84 s | — |
+| `make cpp-test` (59 GoogleTest cases, after the first configure) | 2 s | — |
+| space-time battery, normal tier (300 episodes) | 6 s | 30 s |
+| space-time battery, hard tier (120 episodes) | 23 s | 267 s |
+| parking battery, normal tier (120 scenarios) | 12 s | 60 s |
+| parking battery, hard tier (60 scenarios) | 4 s | 23 s |
+| demo figures + space-time GIFs (10) | 25 s | — |
+| parking GIFs (4) + showcase GIFs (2) | 63 s | — |
+| `make report` (incl. re-running 38 failures) | 29 s | — |
+
+`make all` now runs in roughly 4 minutes, against about 12 before the port.
 
 ## Headline numbers
 
@@ -137,14 +147,19 @@ bare `pytest` binary on this image is the wrong interpreter.
 - Hybrid A* parking: 100% success on all four types over 120 scenarios, every plan
   verified collision free by the independent exact-rectangle checker.
 
-**Hard tier** (30 episodes/scenarios per type)
+**Hard tier** (30 episodes/scenarios per type), on the C++ core
 
-- `congested_hard`: space-time A* 66.7% (1 collision, 9 timeouts), baseline 66.7%
-  (10 collisions).
-- `head_on_narrow`: space-time A* 53.3% (0 collisions, 14 timeouts), baseline **100%**.
+- `congested_hard`: space-time A* **100%**, baseline 66.7% (10 collisions).
+- `head_on_narrow`: space-time A* **100%**, baseline 100%.
 - `parallel_minimal`: 33.3%. `perpendicular_minimal`: 96.7%.
 
-**C++ core**: 13-30x faster than the Python search, identical paths on all 600 comparisons.
+The same tier on the Python reference, same seeds and same 50 ms budget: space-time A*
+63.3% on `congested_hard` (2 collisions, 9 timeouts) and 50.0% on `head_on_narrow`
+(15 timeouts). The baseline is unmoved, because the budget never binds for it. The parking
+tiers are capped by expansions rather than wall clock, so both backends score identically.
+
+**C++ core**: 13-30x on the grid search, ~40x on space-time A*, 20-45x on hybrid A*, with
+identical plans on every comparison `scripts/check_equivalence.py` makes.
 
 ## Things worth knowing
 
@@ -157,10 +172,11 @@ bare `pytest` binary on this image is the wrong interpreter.
 - The C++ core's first version matched every cost but differed on 34 of 600 *paths*,
   because it was missing the Python heap's secondary tie-break on `g`. Fixed and pinned by
   a test.
-- **The hard tier found a result worth reading twice**: in narrow aisles under a 50 ms
-  replan budget the cheap myopic baseline scores 100% while optimal space-time A* scores
-  53%, because the space-time search does not fit in the budget and the ego stalls. Nothing
-  was tuned to change this.
+- **The hard tier found a result worth reading twice, and then the C++ port reversed it.**
+  On the Python reference, in narrow aisles under a 50 ms replan budget, the cheap myopic
+  baseline scored 100% while optimal space-time A* scored 50%: the search did not fit in the
+  budget and the ego stalled. On the C++ core, the identical planner on the identical seeds
+  scores 100%. The algorithm was never the problem; the implementation was. Both tiers are
+  reported side by side rather than the slower one being quietly dropped.
 - The hard space-time tier is **not bit-reproducible** — a wall-clock budget depends on the
-  machine. Re-running it left every success/collision/timeout value identical but moved
-  `nodes_expanded` on 40 of 120 episodes. See `REPORT.md` section 5.
+  machine and on how fast the planner runs. See `REPORT.md` section 5.

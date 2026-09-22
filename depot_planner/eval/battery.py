@@ -42,9 +42,16 @@ def tier_planner_config(tier: str, config: dict[str, Any] | None = None) -> dict
     )
 
 
-def tier_csv(tier: str) -> str:
-    """Name of the CSV this tier writes."""
-    return BATTERY_CSV if tier == "normal" else HARD_BATTERY_CSV
+def tier_csv(tier: str, backend: str | None = None) -> str:
+    """Name of the CSV this tier writes.
+
+    The C++ backend is the default and writes the canonical file; a run on the
+    Python reference writes alongside it, so the two can be reported together.
+    """
+    name = BATTERY_CSV if tier == "normal" else HARD_BATTERY_CSV
+    if core.resolve(backend) == "python":
+        return name.replace(".csv", "_python.csv")
+    return name
 
 
 def battery_seeds(count: int, offset: int) -> list[int]:

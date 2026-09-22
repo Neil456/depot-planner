@@ -65,8 +65,8 @@ and the [C++ core](#c-core) section below compares the two directly.
 <!-- BEGIN GENERATED: grid_table -->
 | algorithm | backend | cost / optimal | nodes expanded | mean ms |
 | :-- | :-- | :-- | :-- | :-- |
-| Dijkstra | cpp | 1.0000 | 1479 | 0.28 |
-| A* | cpp | 1.0000 | 348 | 0.09 |
+| Dijkstra | cpp | 1.0000 | 1479 | 0.26 |
+| A* | cpp | 1.0000 | 348 | 0.08 |
 | Weighted A* (w=1.5) | cpp | 1.0297 | 96 | 0.03 |
 <!-- END GENERATED: grid_table -->
 
@@ -81,35 +81,49 @@ scenarios.
 <!-- BEGIN GENERATED: spacetime_normal -->
 | scenario | planner | success % | collisions | timeouts | mean waits | mean plan ms |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| empty | spacetime_astar | 100.0 | 0 | 0 | 0.0 | 2.22 |
-| empty | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.07 |
-| crossing | spacetime_astar | 100.0 | 0 | 0 | 2.7 | 2.54 |
-| crossing | baseline_replan | 83.3 | 5 | 0 | 0.2 | 0.07 |
-| head_on | spacetime_astar | 100.0 | 0 | 0 | 1.3 | 6.87 |
-| head_on | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.09 |
-| blocked_then_clears | spacetime_astar | 100.0 | 0 | 0 | 9.6 | 5.28 |
-| blocked_then_clears | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.08 |
-| congested | spacetime_astar | 100.0 | 0 | 0 | 9.4 | 22.75 |
-| congested | baseline_replan | 93.3 | 2 | 0 | 1.8 | 0.14 |
+| empty | spacetime_astar | 100.0 | 0 | 0 | 0.0 | 0.07 |
+| empty | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.05 |
+| crossing | spacetime_astar | 100.0 | 0 | 0 | 2.7 | 0.07 |
+| crossing | baseline_replan | 83.3 | 5 | 0 | 0.2 | 0.05 |
+| head_on | spacetime_astar | 100.0 | 0 | 0 | 1.3 | 0.18 |
+| head_on | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.06 |
+| blocked_then_clears | spacetime_astar | 100.0 | 0 | 0 | 9.6 | 0.14 |
+| blocked_then_clears | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.05 |
+| congested | spacetime_astar | 100.0 | 0 | 0 | 9.4 | 0.42 |
+| congested | baseline_replan | 93.3 | 2 | 0 | 1.8 | 0.08 |
 <!-- END GENERATED: spacetime_normal -->
 
 ### Hard tier
 
 `congested_hard` puts 12–16 vehicles in the depot; `head_on_narrow` shrinks the
 aisles to three cells, where one vehicle plus its safety buffer fills the lane
-completely. Both planners also get a hard wall-clock budget per replan.
+completely. Both planners also get a hard wall-clock budget per replan, so this
+is the one tier where how fast the planner runs changes what it achieves.
+Running on the C++ core:
 
 <!-- BEGIN GENERATED: spacetime_hard -->
 | scenario | planner | success % | collisions | timeouts | mean waits | mean plan ms |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| congested_hard | spacetime_astar | 66.7 | 1 | 9 | 61.5 | 28.19 |
-| congested_hard | baseline_replan | 66.7 | 10 | 0 | 6.3 | 0.18 |
-| head_on_narrow | spacetime_astar | 53.3 | 0 | 14 | 106.5 | 28.56 |
-| head_on_narrow | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.10 |
+| congested_hard | spacetime_astar | 100.0 | 0 | 0 | 15.3 | 3.11 |
+| congested_hard | baseline_replan | 66.7 | 10 | 0 | 6.3 | 0.09 |
+| head_on_narrow | spacetime_astar | 100.0 | 0 | 0 | 3.1 | 0.52 |
+| head_on_narrow | baseline_replan | 100.0 | 0 | 0 | 0.0 | 0.07 |
 <!-- END GENERATED: spacetime_hard -->
 
+And the identical tier on the pure-Python reference — same scenarios, same
+seeds, same budget, the slower implementation:
+
+<!-- BEGIN GENERATED: spacetime_hard_python -->
+| scenario | planner | success % | collisions | timeouts | mean waits | mean plan ms |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| congested_hard | spacetime_astar | 63.3 | 2 | 9 | 60.7 | 29.15 |
+| congested_hard | baseline_replan | 66.7 | 10 | 0 | 6.3 | 1.21 |
+| head_on_narrow | spacetime_astar | 50.0 | 0 | 15 | 107.8 | 28.73 |
+| head_on_narrow | baseline_replan | 100.0 | 0 | 0 | 0.0 | 1.46 |
+<!-- END GENERATED: spacetime_hard_python -->
+
 <!-- BEGIN GENERATED: finding_budget -->
-**Under a 50 ms budget per replan, the cheap planner wins in narrow aisles.** On `head_on_narrow` the replanning baseline reaches the goal in 100.0% of episodes while space-time A* manages 53.3%, losing 14 of them to timeouts: the space-time search does not fit in the budget, returns no plan, and the ego stalls in the aisle. On `congested_hard` the two tie on success rate (66.7% against 66.7%), but they fail in opposite ways — space-time A* loses 9 episodes to timeouts and 1 episode to a collision, the baseline 10 episodes to collisions and 0 episodes to timeouts. A planner that cannot answer inside the control loop is not safe, it is just differently unsafe.
+**Under a 50 ms budget per replan, the implementation decides the outcome.** Space-time A\* on the C++ core reaches the goal in 100.0% of `congested_hard` episodes and 100.0% of `head_on_narrow` episodes. The same planner on the Python reference, with the same budget and the same seeds, manages 63.3% of `congested_hard` with 9 timeouts and 50.0% of `head_on_narrow` with 15 timeouts: the search does not fit in the budget, returns no plan, and the ego stalls in the aisle until the episode times out. The replanning baseline is cheap enough either way and is unmoved at 66.7% and 100.0%, but on `congested_hard` it fails by driving into vehicles (10 collisions) rather than by running out of time. Optimality is worthless if it does not fit in the control loop — and here making it fit was an implementation problem, not an algorithmic one.
 <!-- END GENERATED: finding_budget -->
 
 ### Hybrid A\* parking
@@ -120,10 +134,10 @@ re-verified by the independent exact-rectangle checker.
 <!-- BEGIN GENERATED: parking_normal -->
 | parking type | success % | mean plan ms | nodes expanded | direction switches |
 | :-- | :-- | :-- | :-- | :-- |
-| perpendicular_forward | 100.0 | 186.3 | 1448 | 1.10 |
-| perpendicular_reverse | 100.0 | 77.3 | 623 | 0.73 |
-| parallel | 100.0 | 814.6 | 6372 | 2.83 |
-| tight | 100.0 | 484.4 | 3973 | 2.47 |
+| perpendicular_forward | 100.0 | 7.4 | 1448 | 1.10 |
+| perpendicular_reverse | 100.0 | 3.3 | 623 | 0.73 |
+| parallel | 100.0 | 34.8 | 6372 | 2.83 |
+| tight | 100.0 | 19.5 | 3973 | 2.47 |
 <!-- END GENERATED: parking_normal -->
 
 Two minimal-clearance types in the hard tier, 30 scenarios each:
@@ -131,8 +145,8 @@ Two minimal-clearance types in the hard tier, 30 scenarios each:
 <!-- BEGIN GENERATED: parking_hard -->
 | parking type | success % | mean plan ms | nodes expanded | direction switches |
 | :-- | :-- | :-- | :-- | :-- |
-| parallel_minimal | 33.3 | 513.5 | 4029 | 1.50 |
-| perpendicular_minimal | 96.7 | 133.6 | 1092 | 0.72 |
+| parallel_minimal | 33.3 | 19.5 | 4029 | 1.50 |
+| perpendicular_minimal | 96.7 | 5.6 | 1092 | 0.72 |
 <!-- END GENERATED: parking_hard -->
 
 <!-- BEGIN GENERATED: finding_gaps -->
@@ -176,9 +190,9 @@ pairs as the grid table in Results.
 <!-- BEGIN GENERATED: cpp_table -->
 | algorithm | Python ms | C++ ms | speedup | identical paths |
 | :-- | :-- | :-- | :-- | :-- |
-| Dijkstra | 8.6980 | 0.2983 | 29.0 | yes |
-| A* | 2.4435 | 0.1022 | 22.4 | yes |
-| Weighted A* (w=1.5) | 0.7687 | 0.0528 | 13.4 | yes |
+| Dijkstra | 8.6841 | 0.2848 | 30.5 | yes |
+| A* | 2.4274 | 0.1026 | 21.9 | yes |
+| Weighted A* (w=1.5) | 0.7645 | 0.0549 | 12.9 | yes |
 <!-- END GENERATED: cpp_table -->
 
 ## Quickstart

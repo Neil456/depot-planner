@@ -414,3 +414,33 @@ One line per decision: what was chosen and why.
 - The distance field and the coarse heuristic field stay in Python. They are scenario
   geometry rather than planning, the EDT behind them is already C++ (step 2), and building
   them once per scenario is not where the time goes.
+
+## C++ step 5 — the pipeline runs on C++
+
+- `backend=None` resolves through `depot_planner.core` to `"auto"`, which is the C++ core
+  whenever it is built — and `pip install -e .` always builds it. `--backend python` on both
+  battery scripts runs the reference end to end. Keeping `"auto"` rather than hard-coding
+  `"cpp"` means an in-tree checkout with no build still runs, which is what the test suite
+  needs when the extension is absent.
+- A Python-backend run writes its CSV alongside the C++ one (`..._python.csv`) rather than
+  overwriting it, so the two can be reported together instead of one replacing the other.
+  Every battery row also carries a `backend` column.
+- **The hard tier's headline result inverted, and that is the finding.** Under the same 50 ms
+  per-replan budget and the same seeds, space-time A* goes from 63.3% / 50.0% on the Python
+  reference to 100% / 100% on the core. The earlier conclusion — "the cheap myopic baseline
+  beats optimal space-time A* under a real-time budget" — was a statement about the
+  implementation, not the algorithm. Nothing was tuned; the planner, the scenarios, the
+  seeds and the budget are unchanged.
+- **Both backends are reported side by side** in REPORT.md section 2 and in README.md, and
+  section 5 says plainly that the hard tier's numbers are a property of this machine and this
+  implementation. Dropping the slow column would have hidden the only place in the project
+  where runtime changes results.
+- The normal tiers and both parking tiers are identical on every non-timing column, which is
+  what the equivalence work predicted: their caps are on expansions, not wall clock.
+- The generated README finding is rewritten from the numbers, as the earlier one was: it
+  picks its headline by comparing the two backends' success rates rather than asserting a
+  direction. If the port had made no difference it would say so.
+- The report's failure section shrank from 62 runs to 38, and the 24 stale failure frames for
+  space-time timeouts that no longer happen were deleted rather than left in the repository.
+- The GIFs were regenerated and came out byte-identical, which is the expected result: they
+  show normal-tier episodes, and those are unchanged by the backend.

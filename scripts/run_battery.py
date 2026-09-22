@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import time
 
+from depot_planner import core
 from depot_planner.config import results_path
 from depot_planner.eval.battery import (
     TIERS,
@@ -27,17 +28,17 @@ COLUMNS = [
 ]
 
 
-def run_tier(tier: str) -> None:
+def run_tier(tier: str, backend: str | None) -> None:
     settings = tier_settings(tier)
     planner_config = tier_planner_config(tier)
     budget = None if planner_config is None else planner_config["spacetime"]["time_limit_ms"]
-    print(f"\n=== {tier} tier ===")
+    print(f"\n=== {tier} tier ({core.resolve(backend)} backend) ===")
     print(f"scenarios: {', '.join(settings.get('scenario_types', ['(all normal types)']))}")
     print(f"episodes per type: {settings['episodes_per_type']}, seed offset {settings['seed_offset']}"
           + (f", planning budget {budget:.0f} ms/replan" if budget else ""))
     began = time.perf_counter()
-    frame = run_battery(tier=tier)
-    out = write_battery(frame, results_path(tier_csv(tier)))
+    frame = run_battery(tier=tier, backend=backend)
+    out = write_battery(frame, results_path(tier_csv(tier, backend)))
     summary = summarise(frame)
     print()
     print(summary[COLUMNS].to_string(index=False, float_format=lambda v: f"{v:.2f}"))
@@ -47,9 +48,11 @@ def run_tier(tier: str) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tier", choices=(*TIERS, "all"), default="all")
+    parser.add_argument("--backend", choices=core.BACKENDS, default="auto",
+                        help="planner implementation: the C++ core, or the Python reference")
     args = parser.parse_args()
     for tier in (TIERS if args.tier == "all" else (args.tier,)):
-        run_tier(tier)
+        run_tier(tier, args.backend)
 
 
 if __name__ == "__main__":
