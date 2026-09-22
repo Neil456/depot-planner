@@ -1,0 +1,16 @@
+# Occupancy grid, cell costs and obstacle-proximity penalty (step 1).
+resolution: 1.0          # metres per cell
+
+cell_cost:
+  aisle: 1.0             # drivable lane
+  parking: 3.0           # drivable, but discouraged
+
+obstacle_penalty:
+  enabled: true
+  weight: 4.0            # extra cost added on a cell right next to an obstacle
+  radius: 3.0            # metres; penalty decays to 0 at this distance
+  exponent: 2.0          # shape of the decay (1 = linear, 2 = quadratic)
+
+search:
+  weight: 1.5            # default inflation for weighted A*
+  max_nodes: 2000000     # hard cap on expansions before "no path" is returned
