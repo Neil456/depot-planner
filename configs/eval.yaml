@@ -19,6 +19,6 @@ animation:
 
 parking_animation:
   fps: 10
-  dpi: 80
-  figure_size: [5.6, 5.0]
+  dpi: 90
+  figure_size: [7.0, 5.0]
   max_frames: 160

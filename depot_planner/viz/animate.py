@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -101,3 +102,61 @@ def animate_episode(
 
 def gif_size_mb(path: Path | str) -> float:
     return Path(path).stat().st_size / (1024 * 1024)
+
+
+def animate_parking(
+    scenario,
+    result,
+    path: Path | str,
+    config: dict[str, Any] | None = None,
+    title: str | None = None,
+) -> Path:
+    """GIF of the car executing a hybrid A* plan.
+
+    The footprint is drawn along the path, forward segments in blue and reverse
+    segments in orange, and the explored states appear as faint dots in the
+    first frame.
+    """
+    from depot_planner.hybrid.car import CarModel
+    from depot_planner.viz import parking as parking_viz
+
+    cfg = (config if config is not None else load_config("eval"))["parking_animation"]
+    fps = int(cfg["fps"])
+    car = CarModel.from_config(scenario.hybrid_config)
+    poses = result.poses or [scenario.start]
+    directions = result.directions or [1]
+    indices = _frame_indices(len(poses), 1, int(cfg["max_frames"]))
+
+    aspect = scenario.height_m / max(scenario.width_m, 1e-6)
+    width_in = float(cfg["figure_size"][0])
+    fig, ax = plt.subplots(figsize=(width_in, max(2.4, width_in * aspect + 0.6)), dpi=int(cfg["dpi"]))
+    frames: list[np.ndarray] = []
+    label = title or f"{scenario.name} (seed {scenario.seed}) - hybrid A*"
+
+    for frame_number, index in enumerate(indices):
+        ax.clear()
+        parking_viz.setup_axes(ax, scenario)
+        if frame_number == 0:
+            parking_viz.draw_explored(ax, result.explored)
+        parking_viz.draw_path(ax, poses[: index + 1], directions[:index], linewidth=1.8)
+        parking_viz.draw_car(ax, car, scenario.goal, parking_viz.GOAL_COLOR, linewidth=1.4)
+        gear = directions[min(index, len(directions) - 1)]
+        colour = parking_viz.FORWARD_COLOR if gear >= 0 else parking_viz.REVERSE_COLOR
+        parking_viz.draw_car(ax, car, poses[index], colour, linewidth=1.8)
+        travelled = sum(
+            math.hypot(b[0] - a[0], b[1] - a[1])
+            for a, b in zip(poses[: index + 1], poses[1: index + 1])
+        )
+        gear_text = "forward" if gear >= 0 else "reverse"
+        ax.set_title(f"{label}\n{gear_text}   {travelled:5.1f} m of {result.path_length_m:5.1f} m",
+                     fontsize=8)
+        fig.tight_layout()
+        frames.append(_frame_to_array(fig))
+
+    frames.extend([frames[-1]] * max(1, fps))
+    plt.close(fig)
+
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    imageio.mimsave(out, frames, format="GIF", duration=1000.0 / fps, loop=0)
+    return out

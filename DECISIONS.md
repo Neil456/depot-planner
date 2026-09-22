@@ -104,3 +104,43 @@ One line per decision: what was chosen and why.
 - GIFs pick one seed per scenario type and render *both* planners on it, so the two
   animations show the same traffic. The seed is chosen by the battery slice: prefer a seed
   where the baseline fails, then the one where space-time A* waits most.
+
+## Step 5 — hybrid A* parking
+
+- Coordinates keep the project convention (`x` right, `y` **down**) so the parking renderer
+  and the grid renderer agree; the heading is measured from `+x` towards `+y`. The bicycle
+  equations are unchanged by this, only the picture is mirrored.
+- The reference point is the centre of the rear axle, and the 4.5 x 1.9 m footprint runs
+  from 0.9 m behind it to 3.6 m in front.
+- **The distance field is a deliberate underestimate.** `distance_transform_edt` measures
+  centre to centre, and a lookup snaps the query to its cell, so the raw transform can
+  report up to one cell diagonal more clearance than exists. The first parking battery run
+  caught exactly this: the planner returned a path that clipped a parked car's corner by
+  ~1 cm and the independent checker rejected it. Fixed at the source by storing
+  `max(edt - sqrt(2), 0) * resolution` and halving the field resolution to 0.05 m, which
+  leaves the stored value a true lower bound at ~7 cm of conservatism.
+- Reeds-Shepp covers the CSC (`LSL`, `LSR`), CCC (`LRL`) and SCS (`SLS`) families with the
+  standard timeflip/reflect symmetries, not all 48 Reeds-Shepp words. The curve returned is
+  therefore the shortest *candidate*, not provably the global optimum. Every candidate was
+  validated numerically: 7891 curves over random pose pairs all land on the goal to within
+  1e-6 in position and heading.
+- Without the analytic expansion the 0.3 m / 5 degree goal tolerance is essentially
+  unreachable from 1 m arcs on a 0.5 m / 5 degree lattice, so Reeds-Shepp is enabled by
+  default. It is a configuration switch (`analytic.enabled`), and the base search alone
+  still solves the open-lot tests.
+- The heuristic is `max(Euclidean, obstacle-aware grid distance)`. The grid term comes from
+  the step-1 Dijkstra code on a 1 m grid whose cells are drivable when their centre is not
+  inside an obstacle (the optimistic choice). An 8-connected grid overestimates a straight
+  line by up to `1/cos(pi/8)`, so the term is scaled by `cos(pi/8)`. Even so this is the
+  standard hybrid A* "holonomic with obstacles" heuristic and is not a proven lower bound in
+  every obstacle configuration, so hybrid A* here is not claimed to be optimal.
+- Motion primitives are precomputed once in the car's own frame and rotated onto each node,
+  and the whole fan of 10 arcs x 5 sub-steps x 4 discs is collision checked in a single
+  distance-field lookup. That took the twelve smoke-test scenarios from 47 s to 4.3 s with
+  identical outcomes.
+- `sim/car_collision.py` is the independent checker for step 5: exact car rectangle against
+  exact obstacle rectangles by the separating-axis test, on a path interpolated to 0.05 m.
+  It shares nothing with the planner's disc-and-field model, and a test asserts the disc
+  model never accepts a pose the exact test rejects.
+- A `tight` scenario picks one of the three base layouts at random and applies the
+  minimal-clearance overrides, rather than being a fourth layout of its own.
