@@ -22,9 +22,11 @@ gifs:
 	$(PYTHON) scripts/make_parking_gifs.py
 
 report:
+	$(PYTHON) scripts/bench_cpp.py
 	$(PYTHON) scripts/make_report.py
 
 all: setup test step1 battery gifs report
 
 clean:
-	rm -rf results/step1 results/step2 results/step5 results/gifs results/failures results/*.csv
+	rm -rf results/step1 results/step2 results/step5 results/gifs results/*.csv
+	rm -rf results/README_assets/report
