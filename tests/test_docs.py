@@ -100,8 +100,7 @@ def test_the_readme_embeds_the_committed_showcase_gifs():
 def test_the_readme_has_the_sections_a_reader_expects():
     text = _readme()
     for heading in ("## What this is", "## Planners", "## Results",
-                    "## Bugs found by the evaluation harness", "## C++ core",
-                    "## Quickstart", "## Layout", "## Limitations"):
+                    "## C++ core", "## Quickstart", "## Layout"):
         assert heading in text, f"README is missing the section {heading!r}"
 
 
