@@ -52,7 +52,10 @@ bare `pytest` binary on this image is the wrong interpreter.
 | space-time GIFs (10) | 31 s |
 | parking GIFs (4) | 39 s |
 
-## Headline numbers (from the committed CSVs)
+## Headline numbers
+
+(From the generated CSVs under `results/`, which `.gitignore` excludes by design — rerun
+`make battery` to regenerate them.)
 
 - Space-time A*: 100% success and **zero collisions** over 150 episodes.
 - Replanning baseline: 5 collisions on `crossing`, 2 on `congested` (150 episodes).
