@@ -91,7 +91,8 @@ def test_the_report_failure_frames_are_committed():
 
 def test_the_readme_embeds_the_committed_showcase_gifs():
     text = _readme()
-    for asset in ("results/README_assets/hero.gif", "results/README_assets/side_by_side.gif"):
+    for asset in ("results/README_assets/hero.gif", "results/README_assets/side_by_side.gif",
+                  "results/README_assets/parking.gif"):
         assert asset in text, f"README does not embed {asset}"
         assert (REPO_ROOT / asset).is_file(), f"{asset} is not committed"
 

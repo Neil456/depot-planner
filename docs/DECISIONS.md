@@ -260,3 +260,25 @@ One line per decision: what was chosen and why.
 - No planner code, config default or recorded result was changed in this pass. The battery
   CSVs were regenerated from the code so the report and README agree, and the test suite is
   unchanged apart from the new documentation checks.
+
+## README animations, second pass
+
+- The README now embeds three showcase animations rather than two: the hero
+  (space-time A* yielding), the side-by-side against the baseline, and a parallel park.
+  The parking manoeuvre is the clearest thing in the project — four forward/reverse
+  switches in a gap barely longer than the car — and it was previously not on the README
+  at all.
+- `parking.gif` is rendered in the same showcase style as the other two (shared palette,
+  legend, title, status line) rather than reusing the older step-5 GIF, which had a
+  different figure size and no legend. Forward and reverse are coloured differently in
+  both the trail and the car body, so the direction changes read at a glance.
+- The scenario is picked by `eval/showcase.best_parking_episode`, which prefers the most
+  direction switches then the most distance in reverse — the manoeuvre a holonomic planner
+  could least plausibly produce.
+- `parallel` is used rather than `perpendicular_reverse`: both reverse in, but the parallel
+  bay forces the multi-point manoeuvre.
+- The three GIFs `make_report.py` used to copy into `results/README_assets/`
+  (`spacetime_waits_for_traffic.gif`, `baseline_collides_same_scenario.gif`,
+  `hybrid_astar_reverse_parking.gif`) are superseded by the showcase animations and were
+  deleted along with the copying step, so the repository carries one polished version of
+  each rather than two of different quality.

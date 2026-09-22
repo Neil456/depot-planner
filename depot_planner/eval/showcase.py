@@ -49,3 +49,31 @@ def best_contrast_episode(
     if best is None:
         raise ValueError(f"no seeds given for {scenario_type!r}")
     return best[1], best[2]
+
+
+def best_parking_episode(
+    parking_type: str,
+    seeds: Sequence[int],
+    config: dict[str, Any] | None = None,
+):
+    """Find the most demonstrative solved scenario of one parking type.
+
+    Preference goes to the plan with the most forward/reverse switches, then the
+    most distance driven in reverse — that is, the manoeuvre that most obviously
+    could not be done by a holonomic planner.
+    """
+    from depot_planner.hybrid.search import plan_for_scenario
+    from depot_planner.world.parking import generate_parking_scenario
+
+    best = None
+    for seed in seeds:
+        scenario = generate_parking_scenario(parking_type, int(seed), hybrid_config=config)
+        result = plan_for_scenario(scenario)
+        if not result.success:
+            continue
+        score = (result.direction_switches, result.reverse_length_m)
+        if best is None or score > best[0]:
+            best = (score, scenario, result)
+    if best is None:
+        raise ValueError(f"no solved {parking_type!r} scenario among the given seeds")
+    return best[1], best[2]

@@ -46,7 +46,13 @@ distance field of the obstacles. Because 1 m arcs will essentially never land
 exactly on a target pose, the search periodically fires a **Reeds-Shepp curve**
 at the goal and takes it if it is collision-free.
 
-The two space-time planners on the same depot, the same traffic and the same
+Reversing into a parallel bay barely longer than the car. The overlay counts the
+forward/reverse switches; every pose along the path is re-checked against the
+exact car rectangle by a checker that shares no code with the planner:
+
+![hybrid A* reversing into a parallel parking bay](results/README_assets/parking.gif)
+
+And the two space-time planners on the same depot, the same traffic and the same
 seed:
 
 ![space-time A* reaching the goal beside the baseline colliding on the same seed](results/README_assets/side_by_side.gif)
@@ -65,8 +71,8 @@ and the [C++ core](#c-core) section below compares the two directly.
 <!-- BEGIN GENERATED: grid_table -->
 | algorithm | backend | cost / optimal | nodes expanded | mean ms |
 | :-- | :-- | :-- | :-- | :-- |
-| Dijkstra | cpp | 1.0000 | 1479 | 0.28 |
-| A* | cpp | 1.0000 | 348 | 0.09 |
+| Dijkstra | cpp | 1.0000 | 1479 | 0.27 |
+| A* | cpp | 1.0000 | 348 | 0.08 |
 | Weighted A* (w=1.5) | cpp | 1.0297 | 96 | 0.03 |
 <!-- END GENERATED: grid_table -->
 
@@ -176,9 +182,9 @@ grid table in Results.
 <!-- BEGIN GENERATED: cpp_table -->
 | algorithm | Python ms | C++ ms | speedup | identical paths |
 | :-- | :-- | :-- | :-- | :-- |
-| Dijkstra | 8.6980 | 0.2983 | 29.0 | yes |
-| A* | 2.4435 | 0.1022 | 22.4 | yes |
-| Weighted A* (w=1.5) | 0.7687 | 0.0528 | 13.4 | yes |
+| Dijkstra | 8.7508 | 0.2976 | 29.4 | yes |
+| A* | 2.4582 | 0.1036 | 22.3 | yes |
+| Weighted A* (w=1.5) | 0.7679 | 0.0517 | 13.5 | yes |
 <!-- END GENERATED: cpp_table -->
 
 ## Quickstart
