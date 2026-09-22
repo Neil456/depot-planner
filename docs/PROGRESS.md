@@ -67,7 +67,16 @@ orchestration, the independent collision checkers, plotting and reports.
       use them. 18 GoogleTest cases; pytest compares the two backends on 200 random
       start/goal pairs x 3 variants (identical costs, paths and node counts), 200 random
       masks against scipy, and every parking distance field, all bit-identical.
-- [ ] C++ step 3: space-time A* and the snapshot baseline in C++
+- [x] **C++ step 3: space-time A* and the snapshot baseline** — done. `(x, y, t)` states,
+      the wait action, the margin and swap rules with the margin relaxation, the per-step
+      time cost, the Dijkstra cost-to-go heuristic, the node/time/horizon caps and the
+      per-search wall-clock budget are all in C++, as is the baseline's "freeze the agents
+      where they stand" snapshot. 16 more GoogleTest cases.
+      `scripts/check_equivalence.py` compares both planners on **every** battery seed of
+      both tiers from three start steps: 1260 plans, all identical, with no
+      equal-cost tie-break differences at all. The normal-tier closed-loop battery is
+      byte-identical on every non-timing column across 300 episodes, and mean planning
+      time drops from 4.54 ms to 0.11 ms (40x).
 - [ ] C++ step 4: hybrid A* and Reeds-Shepp in C++
 - [ ] C++ step 5: pipeline defaults to the C++ backend; batteries and REPORT.md rerun
 - [ ] C++ step 6: Google Benchmark suite, Python-vs-C++ table, sanitizer CI

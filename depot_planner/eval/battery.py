@@ -8,6 +8,7 @@ from typing import Any, Callable, Sequence
 
 import pandas as pd
 
+from depot_planner import core
 from depot_planner.config import deep_merge, load_config, results_path
 from depot_planner.sim.runner import EpisodeResult, run_episode, verify_episode
 from depot_planner.spacetime.planners import make_planner
@@ -59,12 +60,16 @@ def run_battery(
     on_episode: Callable[[Scenario, EpisodeResult], None] | None = None,
     verbose: bool = True,
     tier: str = "normal",
+    backend: str | None = None,
 ) -> pd.DataFrame:
     """Run one tier of the battery and return one row per episode.
 
     Both planners see the *same* scenario objects, so the comparison is paired.
     Every episode is re-checked with the independent collision checker; a plan a
     planner believed was safe but which the checker rejects raises immediately.
+
+    ``backend`` picks the planner implementation: ``"cpp"``, ``"python"`` for
+    the reference, or ``None`` for the default.
     """
     cfg = tier_settings(tier, config)
     episodes = int(episodes_per_type if episodes_per_type is not None else cfg["episodes_per_type"])
@@ -82,7 +87,7 @@ def run_battery(
         for seed in seeds:
             scenario = generate_scenario(scenario_type, seed)
             for planner_name in names:
-                planner = make_planner(planner_name, planner_config)
+                planner = make_planner(planner_name, planner_config, backend)
                 episode = run_episode(scenario, planner)
                 report = verify_episode(scenario, episode)
                 if episode.success and not report.ok:
@@ -92,6 +97,7 @@ def run_battery(
                     )
                 row = episode.as_row()
                 row["tier"] = tier
+                row["backend"] = core.resolve(backend)
                 row["base_scenario"] = scenario.base or scenario.name
                 rows.append(row)
                 if on_episode is not None:

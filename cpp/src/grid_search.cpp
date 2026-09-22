@@ -55,7 +55,9 @@ SearchResult GridSearch(const CostMapView& cost, Cell start, Cell goal,
   if (options.weight == 0.0) {
     return BestFirstSearch(cost, start, goal, ZeroHeuristic{}, options.limits);
   }
-  OctileHeuristic heuristic{goal, MinFiniteCost(cost) * options.weight};
+  const double scale =
+      std::isnan(options.min_cell_cost) ? MinFiniteCost(cost) : options.min_cell_cost;
+  OctileHeuristic heuristic{goal, scale * options.weight};
   return BestFirstSearch(cost, start, goal, heuristic, options.limits);
 }
 

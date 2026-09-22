@@ -336,3 +336,40 @@ One line per decision: what was chosen and why.
 - The C++ core is now the default for the distance field and the Dijkstra field as well as
   the grid search: `backend="python"` still selects scipy and the pure-Python expansions,
   and the equivalence tests run both.
+
+## C++ step 3 — space-time A* and the snapshot baseline
+
+- **Agent occupancy is a rectangle test, not a cached cell set.** The Python `AgentOccupancy`
+  memoises a frozenset of cells per timestep because building it is expensive in Python; in
+  C++ a footprint is an anchor plus a width and height, so "is this cell inside the margin"
+  is four comparisons per agent. With at most sixteen agents that is cheaper than any cache
+  and removes the per-timestep memory entirely. The rule is unchanged, only how it is
+  evaluated.
+- The open list keeps the Python tuple `(f, -g, counter)`, including the deliberate
+  tie-break towards the *larger* g that walks deeper states first. `-0.0` and `0.0` compare
+  equal in both languages, so the start state's entry behaves identically.
+- **One record per state instead of four dictionaries.** The reference keeps `g_score`,
+  `movement`, `parent` and `closed` keyed on the same `(x, y, t)` tuple. The core packs the
+  state into a single `int64` (`t * cells + y * cols + x`) and stores one record per state
+  in a flat open-addressing table, so an expansion does one lookup rather than four and the
+  inner loop allocates nothing.
+- **The baseline's heuristic scale is passed in, not derived.** `BaselineReplanPlanner`
+  blocks the agents' margin by setting those cells to infinity and then calls step-1 A* with
+  the *unblocked* grid's cheapest cell as the heuristic scale. Blocking can in principle
+  remove every cell at that minimum, in which case the scale the core would derive from the
+  blocked map disagrees with the reference. `GridSearchOptions::min_cell_cost` therefore
+  takes the caller's value, with NaN meaning "derive it". This leaves the step-1 dispatch
+  rule (`can_use_cpp`) and its tests untouched.
+- The snapshot is built inside the core: one copy of the cost map, the agent rectangles
+  written straight into it, the ego's own cell restored, then the search. The reference
+  built a Python set of blocked cells and wrote them into two numpy arrays, which cost more
+  than the search it was preparing.
+- `collect_expanded` stays Python-only, exactly as it is for the step-1 search: the core
+  does not report the expanded-cell set, so `backend="auto"` falls back to the reference for
+  the calls that want it (the step-2 and step-3 figures). A test pins that.
+- **The result: no divergence at all.** 1260 plan comparisons across both planners, both
+  tiers, every battery seed and three start steps produce identical plans, costs, expansion
+  counts and reasons — not one equal-cost tie-break difference. The 300-episode normal-tier
+  battery is identical on every non-timing column.
+- `scripts/check_equivalence.py` exists so that claim is reproducible rather than a note in
+  a commit message; the test suite runs a fast slice of the same comparisons.

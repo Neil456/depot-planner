@@ -64,6 +64,10 @@ struct OctileHeuristic {
 /// more than one gives weighted A*.
 struct GridSearchOptions {
   double weight = 1.0;
+  /// Scale the octile heuristic is multiplied by, before the weight. NaN means
+  /// "the cheapest drivable cell of this map", which is what the step-1 search
+  /// derives when its caller does not supply one.
+  double min_cell_cost = std::numeric_limits<double>::quiet_NaN();
   SearchLimits limits;
 };
 

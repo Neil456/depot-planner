@@ -86,6 +86,9 @@ class GridView {
   int rows() const { return rows_; }
   int cols() const { return cols_; }
   std::size_t size() const { return static_cast<std::size_t>(rows_) * cols_; }
+  /// A default-constructed view holds nothing; callers use this for an
+  /// optional argument such as a precomputed heuristic field.
+  bool empty() const { return data_ == nullptr; }
 
   bool InBounds(int x, int y) const { return x >= 0 && x < cols_ && y >= 0 && y < rows_; }
   std::size_t Index(int x, int y) const { return static_cast<std::size_t>(y) * cols_ + x; }

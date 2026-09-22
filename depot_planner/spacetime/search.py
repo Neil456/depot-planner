@@ -27,7 +27,9 @@ from typing import Any, Sequence
 
 import numpy as np
 
+from depot_planner import core
 from depot_planner.config import load_config
+from depot_planner.grid_astar import backend as _backend
 from depot_planner.grid_astar.search import MOVES, dijkstra_field, octile
 from depot_planner.spacetime.collision import AgentOccupancy
 from depot_planner.world.agents import Agent
@@ -98,11 +100,19 @@ def plan(
     collect_expanded: bool = True,
     max_time: int | None = None,
     heuristic_field: np.ndarray | None = None,
+    backend: str | None = None,
+    agent_timelines: Sequence[tuple[np.ndarray, int, int]] | None = None,
 ) -> SpaceTimeResult:
     """Plan a timed path from ``start`` at ``start_time`` to ``goal``.
 
     ``heuristic_field`` is an optional cost-to-go field from the goal (see
     :func:`goal_cost_field`); pass it in to avoid recomputing it on every replan.
+
+    ``backend`` selects the implementation: ``"cpp"`` for the compiled core,
+    ``"python"`` for this module (the reference), or ``"auto"``/``None`` for the
+    core whenever it is built and the call does not need the expanded-cell set.
+    ``agent_timelines`` is the agents pre-flattened for the core; it is derived
+    from ``agents`` when omitted, and the planner wrappers cache it per scenario.
     """
     cfg = (config if config is not None else load_config("spacetime"))["spacetime"]
     time_cost = float(cfg["time_cost"])
@@ -114,6 +124,13 @@ def plan(
     max_nodes = int(cfg["max_nodes"])
     budget_ms = cfg.get("time_limit_ms")
     budget_ms = None if budget_ms is None else float(budget_ms)
+
+    if core.resolve(backend) == "cpp" and not collect_expanded:
+        return _plan_cpp(
+            cost_map, drivable, start, goal, agents, start_time, min_cell_cost, heuristic_field,
+            agent_timelines, kind, time_cost, inflate, relax, use_time_h, horizon_cap,
+            max_nodes, budget_ms,
+        )
 
     cost = np.asarray(cost_map, dtype=float)
     mask = np.asarray(drivable, dtype=bool) & np.isfinite(cost)
@@ -230,6 +247,77 @@ def plan(
                 heapq.heappush(heap, (tentative + h, -tentative, counter, successor))
 
     return fail("no timed path to the goal", expanded, nodes_expanded)
+
+
+def agent_timelines_for(agents: Sequence[Agent]) -> list[tuple[np.ndarray, int, int]]:
+    """Flatten agents into the ``(timeline, width, height)`` tuples the core takes."""
+    return [
+        (agent.timeline, int(agent.footprint.width), int(agent.footprint.height))
+        for agent in agents
+    ]
+
+
+def _plan_cpp(
+    cost_map: np.ndarray,
+    drivable: np.ndarray,
+    start: Cell,
+    goal: Cell,
+    agents: Sequence[Agent],
+    start_time: int,
+    min_cell_cost: float | None,
+    heuristic_field: np.ndarray | None,
+    agent_timelines: Sequence[tuple[np.ndarray, int, int]] | None,
+    kind: str,
+    time_cost: float,
+    inflate: int,
+    relax: bool,
+    use_time_h: bool,
+    horizon_cap: int,
+    max_nodes: int,
+    budget_ms: float | None,
+) -> SpaceTimeResult:
+    """Run the compiled core and wrap its answer as a :class:`SpaceTimeResult`."""
+    effective = _backend.effective_cost_map(cost_map, drivable)
+    if kind == "grid_dijkstra":
+        field = heuristic_field
+        if field is None:
+            field = goal_cost_field(effective, np.isfinite(effective), goal)
+        field = np.ascontiguousarray(np.asarray(field, dtype=float))
+    elif kind == "octile":
+        field = None
+    else:
+        raise ValueError(f"unknown space-time heuristic {kind!r}")
+
+    if min_cell_cost is None:
+        min_cell_cost = _backend.min_finite(effective)
+    timelines = (
+        agent_timelines if agent_timelines is not None else agent_timelines_for(agents)
+    )
+
+    (success, cells, times, cost, movement_cost, waits, nodes, runtime_ms,
+     reason) = core.require().spacetime_plan(
+        effective,
+        (int(start[0]), int(start[1])),
+        (int(goal[0]), int(goal[1])),
+        int(start_time),
+        list(timelines),
+        field,
+        float(time_cost),
+        int(inflate),
+        bool(relax),
+        bool(use_time_h),
+        float(min_cell_cost),
+        int(horizon_cap),
+        int(max_nodes),
+        -1.0 if budget_ms is None else float(budget_ms),  # negative means unlimited
+    )
+    if not success:
+        return SpaceTimeResult(False, None, None, math.inf, math.inf, 0, int(nodes),
+                               float(runtime_ms), set(), str(reason))
+    return SpaceTimeResult(
+        True, [(int(x), int(y)) for x, y in cells], [int(t) for t in times], float(cost),
+        float(movement_cost), int(waits), int(nodes), float(runtime_ms), set(), str(reason),
+    )
 
 
 def _reconstruct(parent: dict[State, State], start: State, goal: State) -> tuple[list[Cell], list[int]]:
