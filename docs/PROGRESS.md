@@ -77,7 +77,16 @@ orchestration, the independent collision checkers, plotting and reports.
       equal-cost tie-break differences at all. The normal-tier closed-loop battery is
       byte-identical on every non-timing column across 300 episodes, and mean planning
       time drops from 4.54 ms to 0.11 ms (40x).
-- [ ] C++ step 4: hybrid A* and Reeds-Shepp in C++
+- [x] **C++ step 4: hybrid A* and Reeds-Shepp** — done. The kinematic bicycle model,
+      the motion primitives, the heading discretisation, every cost term, the disc-based
+      collision check against the distance field, the `max(Euclidean, obstacle-aware grid)`
+      heuristic and the Reeds-Shepp analytic expansion are all in C++. 25 more GoogleTest
+      cases, including the numerical Reeds-Shepp validation the Python version was held to
+      (every candidate over 3000 random pose pairs lands on its goal to 1e-7).
+      `scripts/check_equivalence.py --section hybrid` plans **all 180** parking battery
+      scenarios of both tiers on both backends: identical success, cost, expansion counts,
+      collision-check counts and pose sequences, and every C++ plan passes the Python
+      independent rectangle checker. 20-45x faster.
 - [ ] C++ step 5: pipeline defaults to the C++ backend; batteries and REPORT.md rerun
 - [ ] C++ step 6: Google Benchmark suite, Python-vs-C++ table, sanitizer CI
 - [ ] C++ step 7 (optional): closed-loop runner in C++

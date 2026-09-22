@@ -12,6 +12,8 @@
 
 #include "depot/distance_field.hpp"
 #include "depot/grid_search.hpp"
+#include "depot/hybrid.hpp"
+#include "depot/reeds_shepp.hpp"
 #include "depot/spacetime.hpp"
 #include "depot/types.hpp"
 
@@ -198,6 +200,122 @@ py::array_t<double> ObstacleDistance(BoolArray drivable, double resolution) {
   return ToArray(field);
 }
 
+/// The car described by configs/hybrid.yaml.
+depot::CarModel ToCar(const py::dict& car) {
+  depot::CarModel model;
+  model.wheelbase = car["wheelbase"].cast<double>();
+  model.length = car["length"].cast<double>();
+  model.width = car["width"].cast<double>();
+  model.max_steer = car["max_steer"].cast<double>();
+  model.rear_overhang = car["rear_overhang"].cast<double>();
+  model.n_discs = car["n_discs"].cast<int>();
+  return model;
+}
+
+depot::HybridOptions ToHybridOptions(const py::dict& options) {
+  depot::HybridOptions out;
+  out.xy_resolution = options["xy_resolution"].cast<double>();
+  out.heading_bins = options["heading_bins"].cast<int>();
+  out.arc_length = options["arc_length"].cast<double>();
+  out.steer_fractions = options["steer_fractions"].cast<std::vector<double>>();
+  out.substeps = options["substeps"].cast<int>();
+  out.directions = options["directions"].cast<std::vector<int>>();
+  out.reverse_multiplier = options["reverse_multiplier"].cast<double>();
+  out.direction_change = options["direction_change"].cast<double>();
+  out.steer_penalty = options["steer_penalty"].cast<double>();
+  out.steer_change_penalty = options["steer_change_penalty"].cast<double>();
+  out.position_tolerance = options["position_tolerance"].cast<double>();
+  out.heading_tolerance = options["heading_tolerance"].cast<double>();
+  out.max_expansions = options["max_expansions"].cast<std::int64_t>();
+  out.time_limit_s = options["time_limit_s"].cast<double>();
+  out.analytic_enabled = options["analytic_enabled"].cast<bool>();
+  out.analytic_every = options["analytic_every"].cast<int>();
+  out.analytic_max_distance = options["analytic_max_distance"].cast<double>();
+  out.analytic_step = options["analytic_step"].cast<double>();
+  out.octile_correction = options["octile_correction"].cast<bool>();
+  out.safety_margin = options["safety_margin"].cast<double>();
+  return out;
+}
+
+py::array_t<double> PosesToArray(const std::vector<depot::Pose>& poses) {
+  py::array_t<double> out({static_cast<py::ssize_t>(poses.size()), static_cast<py::ssize_t>(3)});
+  double* data = out.mutable_data();
+  for (std::size_t i = 0; i < poses.size(); ++i) {
+    data[3 * i] = poses[i].x;
+    data[3 * i + 1] = poses[i].y;
+    data[3 * i + 2] = poses[i].theta;
+  }
+  return out;
+}
+
+// Returns (success, poses, directions, cost, path_length_m, direction_switches,
+//          nodes_expanded, runtime_ms, collision_checks, used_analytic, reason).
+py::tuple HybridPlan(std::tuple<double, double, double> start,
+                     std::tuple<double, double, double> goal, py::dict car_config,
+                     DoubleArray distance_field, double field_resolution,
+                     py::object heuristic_field, double heuristic_resolution,
+                     py::dict options_config) {
+  const depot::CarModel car = ToCar(car_config);
+  const depot::HybridOptions options = ToHybridOptions(options_config);
+  const depot::DistanceFieldView field(ViewOf(distance_field, "distance_field"), field_resolution);
+
+  DoubleArray heuristic_array;
+  depot::CostMapView heuristic;
+  if (!heuristic_field.is_none()) {
+    heuristic_array = heuristic_field.cast<DoubleArray>();
+    heuristic = ViewOf(heuristic_array, "heuristic_field");
+  }
+
+  const depot::Pose start_pose{std::get<0>(start), std::get<1>(start), std::get<2>(start)};
+  const depot::Pose goal_pose{std::get<0>(goal), std::get<1>(goal), std::get<2>(goal)};
+
+  depot::HybridResult result;
+  {
+    py::gil_scoped_release release;
+    result = depot::HybridPlan(start_pose, goal_pose, car, field, heuristic, heuristic_resolution,
+                               options);
+  }
+  py::list directions;
+  for (int direction : result.directions) directions.append(direction);
+  return py::make_tuple(result.success, PosesToArray(result.poses), directions, result.cost,
+                        result.path_length_m, result.direction_switches, result.nodes_expanded,
+                        result.runtime_ms, result.collision_checks, result.used_analytic,
+                        result.reason);
+}
+
+/// The shortest Reeds-Shepp candidate, as (segments, length) or None.
+py::object ShortestReedsShepp(std::tuple<double, double, double> start,
+                              std::tuple<double, double, double> goal, double max_curvature) {
+  bool found = false;
+  const depot::RSPath path = depot::ShortestReedsShepp(
+      depot::Pose{std::get<0>(start), std::get<1>(start), std::get<2>(start)},
+      depot::Pose{std::get<0>(goal), std::get<1>(goal), std::get<2>(goal)}, max_curvature, &found);
+  if (!found) return py::none();
+  py::list segments;
+  for (const depot::RSSegment& segment : path.segments) {
+    segments.append(py::make_tuple(segment.steering, segment.length));
+  }
+  return py::make_tuple(segments, path.Length());
+}
+
+/// Sample a Reeds-Shepp curve, as (poses, directions).
+py::tuple InterpolateReedsShepp(std::tuple<double, double, double> start,
+                                const std::vector<std::pair<int, double>>& segments,
+                                py::dict car_config, double step) {
+  depot::RSPath path;
+  for (const auto& segment : segments) {
+    path.segments.push_back(depot::RSSegment{segment.first, segment.second});
+  }
+  std::vector<depot::Pose> poses;
+  std::vector<int> directions;
+  depot::InterpolateReedsShepp(
+      depot::Pose{std::get<0>(start), std::get<1>(start), std::get<2>(start)}, path,
+      ToCar(car_config), step, &poses, &directions);
+  py::list gears;
+  for (int gear : directions) gears.append(gear);
+  return py::make_tuple(PosesToArray(poses), gears);
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_cpp, m) {
@@ -235,4 +353,18 @@ PYBIND11_MODULE(_cpp, m) {
         py::arg("max_nodes"), py::arg("time_limit_ms"),
         "Grid A* with the agents frozen where they stand at `step`.\n\n"
         "Returns (success, path, cost, nodes_expanded, runtime_ms, reason).");
+
+  m.def("hybrid_plan", &HybridPlan, py::arg("start"), py::arg("goal"), py::arg("car"),
+        py::arg("distance_field"), py::arg("field_resolution"), py::arg("heuristic_field"),
+        py::arg("heuristic_resolution"), py::arg("options"),
+        "Hybrid A* over continuous (x, y, heading) states.\n\n"
+        "Returns (success, poses, directions, cost, path_length_m, direction_switches, "
+        "nodes_expanded, runtime_ms, collision_checks, used_analytic, reason).");
+
+  m.def("shortest_reeds_shepp", &ShortestReedsShepp, py::arg("start"), py::arg("goal"),
+        py::arg("max_curvature"),
+        "The shortest Reeds-Shepp candidate as (segments, length), or None.");
+
+  m.def("interpolate_reeds_shepp", &InterpolateReedsShepp, py::arg("start"), py::arg("segments"),
+        py::arg("car"), py::arg("step"), "Sample a Reeds-Shepp curve into (poses, directions).");
 }

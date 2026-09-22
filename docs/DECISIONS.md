@@ -373,3 +373,44 @@ One line per decision: what was chosen and why.
   battery is identical on every non-timing column.
 - `scripts/check_equivalence.py` exists so that claim is reproducible rather than a note in
   a commit message; the test suite runs a fast slice of the same comparisons.
+
+## C++ step 4 — hybrid A* and Reeds-Shepp
+
+- **`math.hypot` is not the platform `hypot`, and that mattered.** CPython implements its
+  own correctly-rounded norm rather than calling libm; over 200k random pairs `std::hypot`
+  disagreed with it on 0.64% of them, always by one ulp. One ulp in the heuristic is enough
+  to reorder the open list and return a different (equally good) path, so
+  `depot::PythonHypot` reimplements CPython's `vector_norm` exactly. It is bit-identical to
+  `math.hypot` on a million random pairs.
+- **Python's `%` and `//` on floats are not C's.** `a % b` takes the sign of the divisor
+  where `fmod` takes the sign of the dividend, and `a // b` is derived from the remainder
+  and then corrected rather than being `floor(a / b)`. The heading bin uses the first and
+  the heuristic's grid lookup the second, so `PythonMod` and `PythonFloorDiv` implement
+  both. `math.fmod` *is* C's `fmod`, and the angle wrap uses that, so it needed nothing.
+- **numpy's `cos` and `sin` were checked, not assumed.** The reference collision checker
+  calls `np.cos`/`np.sin` on arrays while the primitives call `math.cos`/`math.sin`; on two
+  million random angles the array versions agreed with the scalar ones to the last bit on
+  this platform, so `std::cos` and `std::sin` serve both. (`np.tan` does *not* agree with
+  `math.tan`, but nothing vectorises a tangent.)
+- **The collision check runs on unwrapped headings.** The reference expands a fan of arcs
+  as `theta + local_theta`, checks *that* array, and only wraps the heading when it stores
+  the successor. `cos(theta)` and `cos(wrap(theta))` differ in the last bit, so the port
+  keeps the same order: check unwrapped, store wrapped.
+- The collision-check counter is part of the published results (`collision_checks` in the
+  parking CSV), so the core counts the way the reference's vectorised call does: the whole
+  fan of every expansion, whatever an early exit finds, plus the two endpoint checks.
+- `min()` in Python returns the *first* of several equal minima, so the Reeds-Shepp
+  candidate scan uses a strict `<` and runs in generation order. The word set, the four
+  symmetries and the `1e-9` zero-length filter are all kept in their original order for the
+  same reason.
+- A Reeds-Shepp curve between two *identical* poses is a full 2*pi loop, not a zero-length
+  path, because the zero-length filter removes every segment of the degenerate word and an
+  empty candidate is never added. That is the reference's behaviour too; a GoogleTest case
+  pins it, and hybrid A* never asks for it because it has already reached the goal by then.
+- **The result: no divergence.** All 180 parking battery scenarios across both tiers give
+  identical plans on both backends, down to the pose sequence, and every C++ plan passes
+  the independent exact-rectangle checker. Success rates are therefore identical by
+  construction, not merely equal in aggregate.
+- The distance field and the coarse heuristic field stay in Python. They are scenario
+  geometry rather than planning, the EDT behind them is already C++ (step 2), and building
+  them once per scenario is not where the time goes.

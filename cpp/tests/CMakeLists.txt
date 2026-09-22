@@ -13,6 +13,8 @@ FetchContent_MakeAvailable(googletest)
 add_executable(depot_tests
   test_distance_field.cpp
   test_grid_search.cpp
+  test_hybrid.cpp
+  test_reeds_shepp.cpp
   test_spacetime.cpp
 )
 target_link_libraries(depot_tests PRIVATE depot_core GTest::gtest_main)

@@ -18,6 +18,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
+from depot_planner import core
 from depot_planner.config import load_config
 from depot_planner.hybrid import reeds_shepp as rs
 from depot_planner.hybrid.car import CarModel, Pose, angle_difference, wrap_angle
@@ -177,10 +178,19 @@ def plan(
     config: dict[str, Any] | None = None,
     car: CarModel | None = None,
     collect_explored: bool = True,
+    backend: str | None = None,
 ) -> HybridResult:
-    """Plan a car-shaped path from ``start`` to ``goal``."""
+    """Plan a car-shaped path from ``start`` to ``goal``.
+
+    ``backend`` selects the implementation: ``"cpp"`` for the compiled core,
+    ``"python"`` for this module (the reference), or ``"auto"``/``None`` for the
+    core whenever it is built and the call does not need the explored poses.
+    """
     cfg = config if config is not None else load_config("hybrid")
     model = car if car is not None else CarModel.from_config(cfg)
+
+    if core.resolve(backend) == "cpp" and not collect_explored:
+        return _plan_cpp(start, goal, checker, heuristic_field, heuristic_resolution, cfg, model)
 
     discretisation = cfg["discretisation"]
     xy_resolution = float(discretisation["xy_resolution"])
@@ -300,6 +310,102 @@ def plan(
     return fail("no path found", expansions, explored)
 
 
+def cpp_options(config: dict[str, Any]) -> dict[str, Any]:
+    """Flatten ``configs/hybrid.yaml`` into the keys the C++ core reads."""
+    discretisation = config["discretisation"]
+    primitives = config["primitives"]
+    costs = config["costs"]
+    goal_cfg = config["goal"]
+    limits = config["limits"]
+    analytic = config["analytic"]
+    return {
+        "xy_resolution": float(discretisation["xy_resolution"]),
+        "heading_bins": int(discretisation["heading_bins"]),
+        "arc_length": float(primitives["arc_length"]),
+        "steer_fractions": [float(f) for f in primitives["steer_fractions"]],
+        "substeps": int(primitives["substeps"]),
+        "directions": [int(d) for d in primitives["directions"]],
+        "reverse_multiplier": float(costs["reverse_multiplier"]),
+        "direction_change": float(costs["direction_change"]),
+        "steer_penalty": float(costs["steer_penalty"]),
+        "steer_change_penalty": float(costs["steer_change_penalty"]),
+        "position_tolerance": float(goal_cfg["position_tolerance"]),
+        "heading_tolerance": math.radians(float(goal_cfg["heading_tolerance_deg"])),
+        "max_expansions": int(limits["max_expansions"]),
+        "time_limit_s": float(limits["time_limit_s"]),
+        "analytic_enabled": bool(analytic["enabled"]),
+        "analytic_every": int(analytic["every"]),
+        "analytic_max_distance": float(analytic["max_distance"]),
+        "analytic_step": float(analytic["interpolation_step"]),
+        "octile_correction": bool(config["heuristic"]["octile_correction"]),
+        "safety_margin": float(config["collision"]["safety_margin"]),
+    }
+
+
+def cpp_car(car: CarModel) -> dict[str, Any]:
+    """The car geometry as the keys the C++ core reads."""
+    return {
+        "wheelbase": car.wheelbase,
+        "length": car.length,
+        "width": car.width,
+        "max_steer": car.max_steer,
+        "rear_overhang": car.rear_overhang,
+        "n_discs": car.n_discs,
+    }
+
+
+def _plan_cpp(
+    start: Pose,
+    goal: Pose,
+    checker: CarCollisionChecker,
+    heuristic_field: np.ndarray | None,
+    heuristic_resolution: float,
+    config: dict[str, Any],
+    car: CarModel,
+) -> HybridResult:
+    """Run the compiled core and wrap its answer as a :class:`HybridResult`.
+
+    The distance field and the heuristic field are built in Python (they are
+    scenario geometry, not planning) and borrowed by the core for the call.
+    """
+    field = np.ascontiguousarray(checker.field.distance)
+    heuristic = (
+        None if heuristic_field is None
+        else np.ascontiguousarray(np.asarray(heuristic_field, dtype=float))
+    )
+    (success, poses, directions, cost, length, switches, expansions, runtime_ms,
+     checks, used_analytic, reason) = core.require().hybrid_plan(
+        (float(start[0]), float(start[1]), float(start[2])),
+        (float(goal[0]), float(goal[1]), float(goal[2])),
+        cpp_car(car),
+        field,
+        float(checker.field.resolution),
+        heuristic,
+        float(heuristic_resolution),
+        cpp_options(config),
+    )
+    # Keep the checker's own tally in step, so a reused checker still reports
+    # the total number of poses it has been asked about.
+    checker.checks += int(checks)
+    if not success:
+        return HybridResult(False, [], [], math.inf, 0.0, 0, int(expansions), float(runtime_ms),
+                            checker.checks, [], False, str(reason))
+    return HybridResult(
+        success=True,
+        poses=[(float(x), float(y), float(theta)) for x, y, theta in poses],
+        directions=[int(d) for d in directions],
+        cost=float(cost),
+        path_length_m=float(length),
+        direction_switches=int(switches),
+        nodes_expanded=int(expansions),
+        runtime_ms=float(runtime_ms),
+        collision_checks=checker.checks,
+        explored=[],
+        used_analytic=bool(used_analytic),
+        reason=str(reason),
+    )
+
+
 def _analytic_shot(
     node: _Node,
     goal: Pose,
@@ -379,6 +485,7 @@ def plan_for_scenario(
     scenario,
     config: dict[str, Any] | None = None,
     collect_explored: bool = True,
+    backend: str | None = None,
 ) -> HybridResult:
     """Plan for a :class:`~depot_planner.world.parking.ParkingScenario`."""
     cfg = config if config is not None else scenario.hybrid_config or load_config("hybrid")
@@ -389,5 +496,5 @@ def plan_for_scenario(
         scenario.start, scenario.goal, checker,
         heuristic_field=scenario.goal_distance_field(),
         heuristic_resolution=resolution, config=cfg, car=car,
-        collect_explored=collect_explored,
+        collect_explored=collect_explored, backend=backend,
     )

@@ -8,6 +8,7 @@ from typing import Any, Sequence
 
 import pandas as pd
 
+from depot_planner import core
 from depot_planner.config import deep_merge, load_config, results_path
 from depot_planner.hybrid.search import HybridResult, plan_for_scenario
 from depot_planner.sim.car_collision import check_plan
@@ -44,10 +45,11 @@ def parking_tier_csv(tier: str) -> str:
 
 
 def episode_row(scenario, result: HybridResult, verified: bool, detail: str,
-                tier: str = "normal") -> dict[str, Any]:
+                tier: str = "normal", backend: str = "cpp") -> dict[str, Any]:
     """One flat CSV record for a planned (or unplanned) parking scenario."""
     return {
         "tier": tier,
+        "backend": backend,
         "parking_type": scenario.name,
         "layout": scenario.layout,
         "seed": scenario.seed,
@@ -72,11 +74,15 @@ def run_parking_battery(
     config: dict[str, Any] | None = None,
     verbose: bool = True,
     tier: str = "normal",
+    backend: str | None = None,
 ) -> pd.DataFrame:
     """Plan every scenario and verify each plan with the independent checker.
 
     A plan the planner reports as successful but which the independent checker
     rejects is a bug, so it raises rather than being recorded as a success.
+
+    ``backend`` picks the planner implementation: ``"cpp"``, ``"python"`` for
+    the reference, or ``None`` for the default.
     """
     cfg = parking_tier_settings(tier, config)
     episodes = int(episodes_per_type if episodes_per_type is not None else cfg["episodes_per_type"])
@@ -85,6 +91,7 @@ def run_parking_battery(
         parking_types if parking_types is not None else cfg.get("parking_types", PARKING_TYPES)
     )
     hybrid_cfg = tier_hybrid_config(tier, config)
+    resolved = core.resolve(backend)
 
     rows: list[dict[str, Any]] = []
     began = time.perf_counter()
@@ -92,7 +99,8 @@ def run_parking_battery(
         for index in range(episodes):
             seed = offset + index
             scenario = generate_parking_scenario(parking_type, seed, hybrid_config=hybrid_cfg)
-            result = plan_for_scenario(scenario, collect_explored=False)
+            result = plan_for_scenario(scenario, collect_explored=False,
+                                       backend=backend)
             if result.success:
                 report = check_plan(scenario, result)
                 if not report.ok:
@@ -100,9 +108,11 @@ def run_parking_battery(
                         f"hybrid A* reported success on {parking_type} seed {seed} but the "
                         f"independent checker found: {report.describe()}"
                     )
-                rows.append(episode_row(scenario, result, True, "", tier))
+                rows.append(episode_row(scenario, result, True, "", tier, resolved))
             else:
-                rows.append(episode_row(scenario, result, False, result.reason, tier))
+                rows.append(
+                    episode_row(scenario, result, False, result.reason, tier, resolved)
+                )
         if verbose:
             print(f"  {parking_type:24s} {len(rows):4d} scenarios  ({time.perf_counter() - began:5.1f}s)")
     return pd.DataFrame(rows)

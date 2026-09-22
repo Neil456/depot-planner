@@ -20,6 +20,8 @@ option(DEPOT_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitize
 add_library(depot_core STATIC
   src/distance_field.cpp
   src/grid_search.cpp
+  src/hybrid.cpp
+  src/reeds_shepp.cpp
   src/spacetime.cpp
 )
 target_include_directories(depot_core PUBLIC

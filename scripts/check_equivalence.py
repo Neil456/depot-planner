@@ -143,10 +143,67 @@ def check_spacetime(episodes: int, ties: list[str]) -> int:
     return checked
 
 
+def check_hybrid(episodes: int, ties: list[str]) -> int:
+    """Hybrid A* on every parking battery seed of both tiers.
+
+    Each C++ plan is also handed to the Python independent checker, which shares
+    no code with either planner.
+    """
+    from depot_planner.eval.parking_battery import parking_tier_settings, tier_hybrid_config
+    from depot_planner.hybrid.search import plan_for_scenario
+    from depot_planner.sim.car_collision import check_plan
+    from depot_planner.world.parking import PARKING_TYPES, generate_parking_scenario
+
+    fields = ("success", "nodes_expanded", "direction_switches", "used_analytic",
+              "collision_checks", "reason")
+    checked = 0
+    for tier in ("normal", "hard"):
+        cfg = parking_tier_settings(tier)
+        types = list(cfg.get("parking_types", PARKING_TYPES))
+        count = episodes if episodes else int(cfg["episodes_per_type"])
+        offset = int(cfg["seed_offset"])
+        hybrid_cfg = tier_hybrid_config(tier)
+        for parking_type in types:
+            for index in range(count):
+                seed = offset + index
+                scenario = generate_parking_scenario(parking_type, seed,
+                                                     hybrid_config=hybrid_cfg)
+                plans = {
+                    backend: plan_for_scenario(scenario, collect_explored=False,
+                                               backend=backend)
+                    for backend in ("python", "cpp")
+                }
+                python_plan, cpp_plan = plans["python"], plans["cpp"]
+                label = f"{tier}/{parking_type} seed={seed}"
+                differing = [n for n in fields
+                             if getattr(python_plan, n) != getattr(cpp_plan, n)]
+                same_cost = _same_cost(python_plan.cost, cpp_plan.cost)
+                if differing or not same_cost:
+                    raise Divergence(
+                        f"{label}: {differing or ['cost']} differ\n"
+                        f"  python: ok={python_plan.success} cost={python_plan.cost!r} "
+                        f"expansions={python_plan.nodes_expanded} {python_plan.reason!r}\n"
+                        f"  cpp   : ok={cpp_plan.success} cost={cpp_plan.cost!r} "
+                        f"expansions={cpp_plan.nodes_expanded} {cpp_plan.reason!r}"
+                    )
+                if python_plan.poses != cpp_plan.poses:
+                    ties.append(f"{label}: equal cost, different poses")
+                if cpp_plan.success:
+                    report = check_plan(scenario, cpp_plan)
+                    if not report.ok:
+                        raise Divergence(
+                            f"{label}: the independent checker rejected the C++ plan: "
+                            f"{report.describe()}"
+                        )
+                checked += 1
+    return checked
+
+
 SECTIONS: dict[str, Callable[[int, list[str]], int]] = {
     "grid": check_grid,
     "fields": check_fields,
     "spacetime": check_spacetime,
+    "hybrid": check_hybrid,
 }
 
 
