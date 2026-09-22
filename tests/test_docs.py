@@ -57,14 +57,36 @@ def test_no_document_still_points_at_the_old_top_level_paths():
 # --------------------------------------------------------------- the links
 
 
-def test_every_local_readme_link_resolves():
-    missing = []
-    for target in LINK_PATTERN.findall(_readme()):
+def _broken_links(text: str) -> list[str]:
+    broken = []
+    for target in LINK_PATTERN.findall(text):
         if target.startswith(("http://", "https://", "#", "mailto:")):
             continue
         if not (REPO_ROOT / target.split("#")[0]).exists():
-            missing.append(target)
+            broken.append(target)
+    return broken
+
+
+def test_every_local_readme_link_resolves():
+    missing = _broken_links(_readme())
     assert not missing, f"README links to missing files: {missing}"
+
+
+@needs_battery
+def test_every_local_report_link_resolves():
+    """REPORT.md embeds a frame per failure; none of those images may be missing."""
+    report = (REPO_ROOT / "REPORT.md").read_text(encoding="utf-8")
+    missing = _broken_links(report)
+    assert not missing, f"REPORT.md links to missing files: {missing}"
+
+
+@needs_battery
+def test_the_report_failure_frames_are_committed():
+    report = (REPO_ROOT / "REPORT.md").read_text(encoding="utf-8")
+    frames = [t for t in LINK_PATTERN.findall(report) if "/report/failure_" in t]
+    assert frames, "the report lists no failure frames"
+    for frame in frames:
+        assert (REPO_ROOT / frame).is_file()
 
 
 def test_the_readme_embeds_the_committed_showcase_gifs():
