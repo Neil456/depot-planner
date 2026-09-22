@@ -86,6 +86,7 @@ def grid_table(frame: pd.DataFrame) -> str:
     summary = summarise_grid(frame)
     return report_helpers.markdown_table(summary, [
         ("algorithm", "algorithm", ""),
+        ("backend", "backend", ""),
         ("mean_cost", "mean path cost", ".3f"),
         ("mean_cost_ratio", "mean cost / optimal", ".4f"),
         ("max_cost_ratio", "worst cost / optimal", ".4f"),
@@ -399,7 +400,9 @@ def build_report(frames: dict[str, pd.DataFrame]) -> str:
         "## 1. Grid search: Dijkstra vs A* vs weighted A*",
         "",
         f"{grid['pair'].nunique()} random start/goal pairs on one depot map "
-        f"(`configs/eval.yaml: grid_benchmark`), all three algorithms on every pair.",
+        f"(`configs/eval.yaml: grid_benchmark`), all three algorithms on every pair. These "
+        f"runs use whichever backend is the default here — the `backend` column says which — "
+        f"so compare the timings against section 7 rather than across sections.",
         "",
         grid_table(grid),
         "",

@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 
 from depot_planner.config import load_config, results_path
+from depot_planner.grid_astar.backend import can_use_cpp
 from depot_planner.grid_astar.search import astar, dijkstra, weighted_astar
 from depot_planner.world.depot_maps import generate_depot, sample_start_goal_pairs
 
@@ -40,6 +41,10 @@ def run_grid_benchmark(
     )
     common = dict(drivable=grid.drivable, min_cell_cost=min_cost, collect_expanded=False)
 
+    # These calls do not need the expanded-cell set, so they run on the compiled
+    # core whenever it is built. Record which one actually timed the runs.
+    backend = "cpp" if can_use_cpp("octile", False, cost_map, min_cost) else "python"
+
     rows: list[dict[str, Any]] = []
     for index, (start, goal) in enumerate(problems):
         optimal = None
@@ -50,6 +55,7 @@ def run_grid_benchmark(
             rows.append({
                 "pair": index,
                 "algorithm": name,
+                "backend": backend,
                 "start_x": start[0], "start_y": start[1],
                 "goal_x": goal[0], "goal_y": goal[1],
                 "success": result.success,
@@ -75,6 +81,7 @@ def summarise_grid(frame: pd.DataFrame) -> pd.DataFrame:
     """Per-algorithm summary used by the step-1 table in the report."""
     return frame.groupby("algorithm", sort=False).agg(
         pairs=("pair", "nunique"),
+        backend=("backend", "first"),
         mean_cost=("cost", "mean"),
         mean_cost_ratio=("cost_ratio", "mean"),
         max_cost_ratio=("cost_ratio", "max"),
