@@ -45,9 +45,8 @@ class DistanceFieldView {
 /// Checks car poses by covering the footprint with discs.
 class CarCollisionChecker {
  public:
-  CarCollisionChecker(DistanceFieldView field, CarModel car, double safety_margin)
+  CarCollisionChecker(DistanceFieldView field, const CarModel& car, double safety_margin)
       : field_(field),
-        car_(car),
         offsets_(car.disc_offsets()),
         clearance_(car.disc_radius() + safety_margin) {}
 
@@ -69,7 +68,6 @@ class CarCollisionChecker {
   }
 
   std::int64_t checks() const { return checks_; }
-  double clearance() const { return clearance_; }
 
  private:
   bool Clear(const Pose& pose) const {
@@ -84,7 +82,6 @@ class CarCollisionChecker {
   }
 
   DistanceFieldView field_;
-  CarModel car_;
   std::vector<double> offsets_;
   double clearance_ = 0.0;
   mutable std::int64_t checks_ = 0;

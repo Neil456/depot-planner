@@ -334,6 +334,12 @@ Worth being straight about what these scenarios do and do not model.
   is the standard one and is not a proven lower bound in every obstacle layout,
   and the Reeds-Shepp word set covers the CSC, CCC and SCS families rather than
   all 48 words.
+- **The C++ core is verified equal, not verified fast.** The equivalence checks
+  say the two implementations return the same plans, not that either is the
+  fastest possible: the speed-ups are what this port achieved on this machine
+  with this compiler, not an upper bound. The Python side was not deliberately
+  slowed down either — it is the same reference implementation the project
+  shipped before the port.
 - **The hard tier's wall-clock budget is not bit-reproducible, and it is the
   one place the implementation changes the result.** How much search fits in
   50 ms depends on how fast the planner runs and on the machine it runs on. One

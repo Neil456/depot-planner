@@ -62,8 +62,6 @@ class StateTable {
     return records_[slot];
   }
 
-  std::size_t size() const { return size_; }
-
  private:
   static std::uint64_t Mix(std::uint64_t value) {
     value += 0x9e3779b97f4a7c15ULL;

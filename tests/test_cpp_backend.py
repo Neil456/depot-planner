@@ -1,4 +1,10 @@
-"""Step 7 checks: the C++ core must match the Python search exactly, or be absent."""
+"""The C++ core must match the Python grid search exactly, or be absent.
+
+These checks date from the original step 7, when only the grid search was
+ported; they still pin the backend dispatch helpers and the step-1 equivalence
+over 200 start/goal pairs. The later ports are covered by test_cpp_core.py,
+test_cpp_spacetime.py, test_cpp_hybrid.py and test_cpp_runner.py.
+"""
 
 from __future__ import annotations
 
@@ -17,7 +23,7 @@ PAIRS = 200
 
 needs_cpp = pytest.mark.skipif(
     not backend_module.extension_available(),
-    reason="the optional C++ core is not built",
+    reason="the C++ core is not built",
 )
 
 

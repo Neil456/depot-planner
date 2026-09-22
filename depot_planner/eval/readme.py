@@ -233,7 +233,7 @@ def build_regions() -> dict[str, str]:
         regions["cpp_table"] = _cpp_table(pd.read_csv(cpp_path))
     else:
         regions["cpp_table"] = (
-            "_The optional C++ core was not built in this run; run `make report` after "
+            "_The C++ core was not benchmarked in this run; run `make report` after "
             "`pip install -e .` to fill this table._"
         )
     assert set(regions) == set(REGION_NAMES), "build_regions() drifted from REGION_NAMES"

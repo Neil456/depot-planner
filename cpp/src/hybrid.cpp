@@ -34,7 +34,6 @@ class PrimitiveSet {
   }
 
   std::size_t size() const { return gears_.size(); }
-  int substeps() const { return substeps_; }
   int gear(std::size_t index) const { return gears_[index]; }
   double steer(std::size_t index) const { return steers_[index]; }
 
